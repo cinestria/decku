@@ -81,7 +81,9 @@ const cmdCh = await join(cmdChannel(cfg.namespace));
 for (let i = 0; i < 15 && sessions.length === 0; i++) await sleep(500);
 console.log(`\n=== M3 E2E ===`);
 console.log(`세션 목록 수신: ${sessions.length}개`);
-if (sessions[0]) console.log(`  예: ${sessions[0].cwd}`);
+for (const s of sessions) {
+  console.log(`  • ${s.title ?? "(제목없음)"}  —  ${s.cwd.split("/").pop()}`);
+}
 console.log(`Supabase 측 payload(ct) 표본: ${cipherSample || "(없음)"}…  ← 평문 아님(E2EE)`);
 
 if (sessions.length === 0) {

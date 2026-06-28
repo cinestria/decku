@@ -13,6 +13,7 @@ import { renderEvent } from "../lib/render.js";
 import { loadConfig } from "../lib/config.js";
 import { BridgeRealtime } from "../lib/realtime.js";
 import { injectMessage } from "../lib/inject.js";
+import { TitleCache } from "../lib/titles.js";
 
 const POLL_MS = 1000;
 const HEARTBEAT_MS = 4000; // 늦게 접속한 브라우저도 목록 받도록 주기적 재전송 (broadcast는 replay 없음)
@@ -53,6 +54,7 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
 
   // 브라우저가 연 세션만 live tail (그 외엔 목록만)
   const activeTails = new Map<string, TranscriptTail>();
+  const titles = new TitleCache();
   let liveMap = new Map<string, SessionFile>();
 
   await rt.connect((cmd: CmdPayload) => {
@@ -124,11 +126,18 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
     liveMap = new Map(live.map((s) => [s.sessionId, s]));
 
     // 목록 변화 시 또는 heartbeat 주기마다 publish (늦은 접속자 대비)
-    const items = live.map(toListItem);
+    const now = Date.now();
+    const items = await Promise.all(
+      live.map(async (s) => {
+        const title = await titles.get(s.sessionId, transcriptPath(s), now);
+        const item = toListItem(s);
+        return title ? { ...item, title } : item;
+      }),
+    );
     const json = JSON.stringify(items);
-    if (json !== lastSessionsJson || Date.now() - lastPublish > HEARTBEAT_MS) {
+    if (json !== lastSessionsJson || now - lastPublish > HEARTBEAT_MS) {
       lastSessionsJson = json;
-      lastPublish = Date.now();
+      lastPublish = now;
       await rt.publishSessions({ type: "sessions", items });
     }
 

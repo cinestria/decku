@@ -90,8 +90,8 @@
       {/if}
       {#each sessions as s (s.sessionId)}
         <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
-          <span class="cwd">{cwdName(s.cwd)}</span>
-          <span class="path">{s.cwd}</span>
+          <span class="cwd">{s.title ?? cwdName(s.cwd)}</span>
+          <span class="path">{cwdName(s.cwd)}</span>
         </button>
       {/each}
     </aside>
