@@ -20,11 +20,14 @@ import {
 } from "@decku/shared";
 import type { Pairing } from "./pairing";
 
+const REFRESH_MS = 45 * 60 * 1000; // realtime 토큰 1h 만료 전 갱신 → 오래 열어둬도 안 끊김
+
 export class DeckuClient {
   private sb: SupabaseClient;
   private key!: CryptoKey;
   private cmdCh?: RealtimeChannel;
   private txCh?: RealtimeChannel;
+  private refreshTimer?: ReturnType<typeof setInterval>;
 
   constructor(private p: Pairing) {
     const url = env.PUBLIC_SUPABASE_URL;
@@ -40,6 +43,9 @@ export class DeckuClient {
   async start(onSessions: (items: SessionListItem[]) => void): Promise<void> {
     this.key = await importKey(decodeKey(this.p.k));
     await this.refresh();
+    this.refreshTimer = setInterval(() => {
+      void this.refresh().catch((e) => console.error("토큰 갱신 실패:", e));
+    }, REFRESH_MS);
     await this.join(sessionsChannel(this.p.ns), async (env) => {
       const payload = await decrypt<SessionsPayload>(this.key, env);
       if (payload.type === "sessions") onSessions(payload.items);
@@ -113,6 +119,7 @@ export class DeckuClient {
   }
 
   async stop(): Promise<void> {
+    if (this.refreshTimer) clearInterval(this.refreshTimer);
     await this.sb.removeAllChannels();
   }
 }

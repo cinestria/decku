@@ -6,6 +6,9 @@
 
   let pairing = $state<Pairing | null>(null);
   let status = $state("초기화…");
+  let connected = $state(false);
+  let online = $state(false); // 브릿지 heartbeat 수신 중인가
+  let lastSeen = 0; // 마지막 세션목록 수신 시각 (비반응)
   let sessions = $state<SessionListItem[]>([]);
   let selected = $state<string | null>(null);
   let events = $state<RenderEvent[]>([]);
@@ -13,6 +16,7 @@
   let draft = $state("");
   let sending = $state(false);
   let client: DeckuClient | null = null;
+  let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
 
   function cwdName(cwd: string): string {
     return cwd.split("/").filter(Boolean).pop() ?? cwd;
@@ -29,14 +33,21 @@
     try {
       await client.start((items) => {
         sessions = items;
+        lastSeen = Date.now();
       });
-      status = `연결됨 · namespace ${p.ns.slice(0, 8)}…`;
+      connected = true;
+      status = `namespace ${p.ns.slice(0, 8)}…`;
     } catch (e) {
       status = "연결 실패: " + (e as Error).message;
     }
+    // heartbeat 기반 온라인 판정 (브릿지가 ~4s마다 목록 재전송)
+    heartbeatTimer = setInterval(() => {
+      online = lastSeen > 0 && Date.now() - lastSeen < 12000;
+    }, 2000);
   });
 
   onDestroy(() => {
+    if (heartbeatTimer) clearInterval(heartbeatTimer);
     void client?.stop();
   });
 
@@ -72,7 +83,12 @@
 
 <header>
   <strong>decku</strong>
-  <span class="status">{status}</span>
+  {#if connected}
+    <span class="dot" class:on={online}></span>
+    <span class="status">{online ? "브릿지 온라인" : "브릿지 오프라인"} · {status}</span>
+  {:else}
+    <span class="status">{status}</span>
+  {/if}
   {#if pairing}<button onclick={unpair}>연결 해제</button>{/if}
 </header>
 
@@ -85,7 +101,9 @@
   <div class="layout">
     <aside>
       <h3>세션 {sessions.length}</h3>
-      {#if sessions.length === 0}
+      {#if connected && !online}
+        <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku-bridge run</code> 확인.</p>
+      {:else if sessions.length === 0}
         <p class="muted">대기 중…</p>
       {/if}
       {#each sessions as s (s.sessionId)}
@@ -138,6 +156,9 @@
     font-family: system-ui, sans-serif;
   }
   .status { color: #666; font-size: 0.85rem; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; background: #c00; display: inline-block; }
+  .dot.on { background: #1a9d3b; }
+  .offline-hint { color: #b00; font-size: 0.8rem; padding: 0.4rem 0.5rem; background: #fff4f4; border-radius: 6px; }
   header button { margin-left: auto; font-size: 0.8rem; }
   .empty { max-width: 36rem; margin: 4rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
   .layout { display: grid; grid-template-columns: 18rem 1fr; height: calc(100vh - 49px); font-family: system-ui, sans-serif; }

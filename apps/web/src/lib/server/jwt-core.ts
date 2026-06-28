@@ -4,8 +4,8 @@
  */
 import { SignJWT, jwtVerify } from "jose";
 
-const PAIRING_TTL = "30d";
-const REALTIME_TTL = "1h";
+const PAIRING_TTL = "365d"; // 기기 페어링은 장수명 — 연속성. (e2eeKey가 실제 비밀, --new로 회전)
+const REALTIME_TTL = "1h"; // 단명, 브라우저가 주기적으로 갱신
 
 export async function signPairingWithSecret(secret: Uint8Array, namespace: string): Promise<string> {
   return new SignJWT({ namespace, scope: "pair" })

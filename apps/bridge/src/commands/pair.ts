@@ -1,13 +1,16 @@
 /**
- * `decku-bridge pair [--url <webUrl>]`
+ * `decku-bridge pair [--url <webUrl>] [--new]`
  *
- * 웹앱에서 namespace+pairingToken 받고, e2eeKey를 로컬 생성해 저장.
- * 브라우저에서 열 페어링 URL(+QR)을 출력. e2eeKey는 URL의 #fragment에만 → 서버로 안 감.
+ * 멱등: 이미 페어링돼 있으면 **같은 namespace/키를 재사용**하고 링크만 다시 보여준다.
+ *       → 브릿지를 재시작해도 브라우저에 저장된 페어링이 그대로 유효(연속성).
+ *       새 namespace로 갈아끼우려면 `--new`.
+ *
+ * e2eeKey/토큰은 URL의 #fragment에만 → 서버로 안 감.
  */
 import qrcode from "qrcode-terminal";
 import { generateKeyBytes, encodeKey } from "@decku/shared";
 import { apiPair } from "../lib/api.js";
-import { saveConfig } from "../lib/config.js";
+import { loadConfig, saveConfig, type BridgeConfig } from "../lib/config.js";
 
 function flag(argv: string[], name: string): string | undefined {
   const i = argv.indexOf(name);
@@ -15,28 +18,34 @@ function flag(argv: string[], name: string): string | undefined {
 }
 
 export async function pair(argv: string[]): Promise<void> {
-  const apiUrl = (flag(argv, "--url") ?? process.env.DECKU_URL ?? "http://localhost:5173").replace(/\/$/, "");
+  const forceNew = argv.includes("--new") || argv.includes("--force");
+  const existing = await loadConfig();
 
-  console.log(`페어링 중… (${apiUrl})`);
-  const res = await apiPair(apiUrl);
-  const e2eeKey = encodeKey(generateKeyBytes());
+  let cfg: BridgeConfig;
+  if (existing && !forceNew) {
+    cfg = existing;
+    console.log(`기존 페어링 재사용 (namespace ${cfg.namespace.slice(0, 8)}…). 새로 만들려면 --new.`);
+  } else {
+    const apiUrl = (flag(argv, "--url") ?? process.env.DECKU_URL ?? "http://localhost:5173").replace(/\/$/, "");
+    console.log(`페어링 중… (${apiUrl})`);
+    const res = await apiPair(apiUrl);
+    cfg = {
+      apiUrl,
+      namespace: res.namespace,
+      pairingToken: res.pairingToken,
+      e2eeKey: encodeKey(generateKeyBytes()),
+      supabaseUrl: res.supabaseUrl,
+      supabaseAnonKey: res.supabaseAnonKey,
+    };
+    await saveConfig(cfg);
+    console.log(`✓ 새 페어링 저장됨 (namespace ${res.namespace.slice(0, 8)}…)`);
+  }
 
-  await saveConfig({
-    apiUrl,
-    namespace: res.namespace,
-    pairingToken: res.pairingToken,
-    e2eeKey,
-    supabaseUrl: res.supabaseUrl,
-    supabaseAnonKey: res.supabaseAnonKey,
-  });
+  const frag = `ns=${cfg.namespace}&pt=${encodeURIComponent(cfg.pairingToken)}&k=${cfg.e2eeKey}`;
+  const url = `${cfg.apiUrl}/#${frag}`;
 
-  // e2eeKey/토큰은 #fragment → 브라우저만 보고 서버엔 전송 안 됨
-  const frag = `ns=${res.namespace}&pt=${encodeURIComponent(res.pairingToken)}&k=${e2eeKey}`;
-  const url = `${apiUrl}/#${frag}`;
-
-  console.log(`\n✓ 페어링 저장됨 (namespace ${res.namespace.slice(0, 8)}…)\n`);
-  console.log("브라우저에서 아래 QR을 스캔하거나 URL을 여세요:\n");
+  console.log("\n브라우저에서 아래 QR을 스캔하거나 URL을 여세요 (한 번만 열면 이후 자동 재연결):\n");
   qrcode.generate(url, { small: true });
   console.log(`\n  ${url}\n`);
-  console.log("그다음 이 터미널에서:  decku-bridge run\n");
+  console.log("그다음:  decku-bridge run   (또는 decku-bridge install 로 상시 실행)\n");
 }
