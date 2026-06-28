@@ -16,11 +16,11 @@ npx @decku/bridge run
 ### 자동 시작 (macOS)
 ```bash
 npm i -g @decku/bridge
-decku-bridge pair --url <webUrl>
-decku-bridge install      # launchd 등록 (로그인 시 자동 실행)
-decku-bridge uninstall    # 해제
+decku pair --url <webUrl>
+decku install      # launchd 등록 (로그인 시 자동 실행)
+decku uninstall    # 해제
 ```
-로그: `~/.decku/bridge.log`. Windows=작업 스케줄러, Linux=systemd user에 `decku-bridge run`을 등록.
+로그: `~/.decku/bridge.log`. Windows=작업 스케줄러, Linux=systemd user에 `decku run`을 등록.
 
 ## 동작 / 보안
 

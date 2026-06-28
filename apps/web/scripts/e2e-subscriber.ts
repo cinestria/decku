@@ -2,7 +2,7 @@
  * M3 E2E 검증 — "브라우저" 역할(헤드리스). 브릿지 config(~/.decku/config.json)로 페어링을 읽어
  * Supabase에 붙어 세션목록·백필을 복호해 본다. Supabase 측 payload가 ciphertext인지도 확인.
  *
- * 전제: 웹 dev 서버 + `decku-bridge run`(realtime)이 떠 있어야 함.
+ * 전제: 웹 dev 서버 + `decku run`(realtime)이 떠 있어야 함.
  * 실행: cd apps/web && pnpm exec tsx scripts/e2e-subscriber.ts
  */
 import * as fs from "node:fs";

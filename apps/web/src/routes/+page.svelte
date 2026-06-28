@@ -95,14 +95,14 @@
 {#if !pairing}
   <main class="empty">
     <h2>페어링이 필요합니다</h2>
-    <p>Mac에서 <code>decku-bridge pair</code> 실행 후, 표시되는 QR을 스캔하거나 URL을 여세요.</p>
+    <p>Mac에서 <code>decku pair</code> 실행 후, 표시되는 QR을 스캔하거나 URL을 여세요.</p>
   </main>
 {:else}
   <div class="layout">
     <aside>
       <h3>세션 {sessions.length}</h3>
       {#if connected && !online}
-        <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku-bridge run</code> 확인.</p>
+        <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku run</code> 확인.</p>
       {:else if sessions.length === 0}
         <p class="muted">대기 중…</p>
       {/if}

@@ -60,7 +60,7 @@ pnpm db:migrate                          # namespaces 테이블
 ### 웹 → Vercel
 1. Vercel에 repo 연결, **Root Directory = `apps/web`** (pnpm workspace 자동 감지).
 2. 환경변수 3개(`SUPABASE_JWT_SECRET`, `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`) 등록.
-3. 배포 후 프로덕션 URL로 페어링: `decku-bridge pair --url https://<your>.vercel.app`.
+3. 배포 후 프로덕션 URL로 페어링: `decku pair --url https://<your>.vercel.app`.
 
 ### 브릿지 → npm / npx
 ```bash
@@ -68,7 +68,7 @@ pnpm --filter @decku/bridge build        # tsup 번들 → dist/cli.js
 cd apps/bridge && npm publish            # (npm 로그인 후)
 ```
 사용자: `npx @decku/bridge pair --url <webUrl>` → `npx @decku/bridge run`.
-부팅 자동시작(macOS): 전역 설치 후 `decku-bridge install`(launchd). Windows=작업 스케줄러, Linux=systemd user에 `decku-bridge run` 등록.
+부팅 자동시작(macOS): 전역 설치 후 `decku install`(launchd). Windows=작업 스케줄러, Linux=systemd user에 `decku run` 등록.
 
 ## 보안 체크리스트
 

@@ -1,5 +1,5 @@
 /**
- * `decku-bridge pair [--url <webUrl>] [--new]`
+ * `decku pair [--url <webUrl>] [--new]`
  *
  * 멱등: 이미 페어링돼 있으면 **같은 namespace/키를 재사용**하고 링크만 다시 보여준다.
  *       → 브릿지를 재시작해도 브라우저에 저장된 페어링이 그대로 유효(연속성).
@@ -47,5 +47,5 @@ export async function pair(argv: string[]): Promise<void> {
   console.log("\n브라우저에서 아래 QR을 스캔하거나 URL을 여세요 (한 번만 열면 이후 자동 재연결):\n");
   qrcode.generate(url, { small: true });
   console.log(`\n  ${url}\n`);
-  console.log("그다음:  decku-bridge run   (또는 decku-bridge install 로 상시 실행)\n");
+  console.log("그다음:  decku run   (또는 decku install 로 상시 실행)\n");
 }

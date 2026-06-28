@@ -12,13 +12,13 @@ import { run } from "./commands/run.js";
 import { pair } from "./commands/pair.js";
 import { install, uninstall } from "./commands/install.js";
 
-const USAGE = `decku-bridge — Claude Desktop 세션을 웹앱에 연결
+const USAGE = `decku — Claude Desktop 세션을 웹앱에 연결
 
 사용법:
-  decku-bridge pair --url <webUrl>   웹앱과 페어링 (QR/URL 출력)
-  decku-bridge run                   세션 watch + realtime (기본)
-  decku-bridge install               부팅 시 자동 시작 등록 (macOS)
-  decku-bridge uninstall             자동 시작 해제
+  decku pair --url <webUrl>   웹앱과 페어링 (QR/URL 출력)
+  decku run                   세션 watch + realtime (기본)
+  decku install               부팅 시 자동 시작 등록 (macOS)
+  decku uninstall             자동 시작 해제
 `;
 
 async function main(): Promise<void> {

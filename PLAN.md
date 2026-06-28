@@ -87,7 +87,7 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 
 ### 4-A. QR 페어링 (로그인 없이 격리 + E2EE)
 ```
-[브릿지] 첫 실행 (decku-bridge pair)
+[브릿지] 첫 실행 (decku pair)
   → POST /api/pair  → { namespace(랜덤), pairingJWT(단명, namespace 서명) } 수령
   → e2eeKey(32B) 로컬 생성 — 서버에 절대 안 보냄
   → 로컬 저장(~/.decku/) + QR 표시 { namespace, pairingJWT, e2eeKey }  (또는 deep-link URL)
@@ -180,7 +180,7 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 1. **Agent SDK resume 의미론** — resume한 세션이 GUI 창과 별개 입력 주체. M4에서 실제 동작·중복 입력 충돌 확인 필요(문서 1-4 함의).
 2. **Supabase Realtime Authorization** — private 채널 RLS는 비교적 신기능. M2에서 격리 음성 테스트를 반드시 먼저.
 3. **메시지 크기/속도 한도** — 무료 tier 한도 내 청크/스로틀. M5 부하 테스트.
-4. **브릿지 배포 UX** — 비개발 유저가 로컬 데몬 띄우기. 초기엔 `npx decku-bridge` + 페어링 코드 안내로.
+4. **브릿지 배포 UX** — 비개발 유저가 로컬 데몬 띄우기. 초기엔 `npx decku` + 페어링 코드 안내로.
 5. **E2EE 잔여신뢰** — 오픈소스 안 함 → 클라이언트가 키를 안 빼돌린다는 보장은 코드 비공개 상태. M6 서드파티 감사로 보강. 키 분실 = 복호 불가(설계상 복구 불가, 의도된 것).
 6. **Apple 비용/로테이션** — $99/yr + client_secret 6개월 만료. M6에서 결제 후, Supabase 자동 갱신 설정.
 

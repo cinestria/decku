@@ -6,7 +6,7 @@
   "private": false,
   "type": "module",
   "bin": {
-    "decku-bridge": "./dist/cli.js"
+    "decku": "./dist/cli.js"
   },
   "files": ["dist", "README.md"],
   "engines": {

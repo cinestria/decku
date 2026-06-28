@@ -1,5 +1,5 @@
 /**
- * `decku-bridge run [sessionId] [--from-start|-a] [--console]`
+ * `decku run [sessionId] [--from-start|-a] [--console]`
  *
  * 페어링됨 → **realtime publish 모드**: 세션목록/transcript를 암호화해 Supabase로 publish,
  *            브라우저 cmd(load) 수신.
@@ -39,7 +39,7 @@ export async function run(argv: string[] = []): Promise<void> {
   const cfg = argv.includes("--console") ? null : await loadConfig();
   if (!cfg) {
     if (!argv.includes("--console")) {
-      console.log(`${DIM}(페어링 안 됨 → 콘솔 모드. 웹 연동은 'decku-bridge pair' 후)${RESET}`);
+      console.log(`${DIM}(페어링 안 됨 → 콘솔 모드. 웹 연동은 'decku pair' 후)${RESET}`);
     }
     return runConsole(argv);
   }
@@ -49,7 +49,7 @@ export async function run(argv: string[] = []): Promise<void> {
 // ───────────────────────── realtime 모드 ─────────────────────────
 
 async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig>>>, argv: string[]): Promise<void> {
-  console.log(`${BOLD}decku-bridge${RESET} realtime 연결 중… (namespace ${shortId(cfg.namespace)}…)`);
+  console.log(`${BOLD}decku${RESET} realtime 연결 중… (namespace ${shortId(cfg.namespace)}…)`);
   const rt = new BridgeRealtime(cfg);
 
   // 브라우저가 연 세션만 live tail (그 외엔 목록만)
