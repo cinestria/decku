@@ -6,9 +6,12 @@
   "private": false,
   "type": "module",
   "bin": {
-    "decku": "./dist/cli.js"
+    "decku": "dist/cli.js"
   },
-  "files": ["dist", "README.md"],
+  "files": [
+    "dist",
+    "README.md"
+  ],
   "engines": {
     "node": ">=20"
   },
