@@ -150,9 +150,11 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 - 프론트: pairing(URL hash→localStorage) + `DeckuClient`(구독/복호/cmd) + 세션목록·대화 UI(Svelte 5).
 - ✅ **E2E 실측 PASS**: 브릿지→Supabase(ciphertext)→구독자 복호 왕복. 백필 789 events(done), 세션목록 5개, Supabase엔 ciphertext만.
 
-### M4 — 채팅 전송 (1d)
-- 프론트 입력 → `cmd` publish. 브릿지 cmd subscribe → Agent SDK resume 주입 → append가 tx로 돌아와 화면 갱신.
-- ✅ 브라우저에서 친 메시지가 세션에 들어가고 응답이 실시간으로 흐름.
+### M4 — 채팅 전송 ✅ 완료
+- 브릿지 `lib/inject.ts`: cmd send → `claude -p <text> --resume <sid>`(세션 cwd)로 한 턴 주입. 응답 append는 tail이 tx로 publish.
+- 웹: 대화 패널 입력창/전송 → `DeckuClient.sendChat` → cmd send.
+- ✅ resume 주입 실측: 같은 transcript에 append + **맥락 유지**(10→18줄, PONG 회상), 같은 sessionId.
+- 참고: `-p` 세션은 registry 미등록 → decku 목록엔 Desktop/interactive 세션만. 브라우저 실시간 데모는 실세션에서(주입은 사용자 선택).
 
 ### M5 — Vercel 배포 + 마감 (1d)
 - 프론트 + API route Vercel 배포, env(secret) 설정. 브릿지 **`npm publish` + Homebrew formula + Scoop/winget 매니페스트**(전부 node 의존) + `install` 서브커맨드(autostart) + 셋업 문서.
