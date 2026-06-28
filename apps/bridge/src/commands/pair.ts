@@ -32,7 +32,6 @@ export async function pair(argv: string[]): Promise<void> {
     cfg = {
       apiUrl,
       namespace: res.namespace,
-      pairingToken: res.pairingToken,
       e2eeKey: encodeKey(generateKeyBytes()),
       supabaseUrl: res.supabaseUrl,
       supabaseAnonKey: res.supabaseAnonKey,
@@ -41,8 +40,7 @@ export async function pair(argv: string[]): Promise<void> {
     console.log(`✓ 새 페어링 저장됨 (namespace ${res.namespace.slice(0, 8)}…)`);
   }
 
-  const frag = `ns=${cfg.namespace}&pt=${encodeURIComponent(cfg.pairingToken)}&k=${cfg.e2eeKey}`;
-  const url = `${cfg.apiUrl}/#${frag}`;
+  const url = `${cfg.apiUrl}/#ns=${cfg.namespace}&k=${cfg.e2eeKey}`;
 
   console.log("\n브라우저에서 아래 QR을 스캔하거나 URL을 여세요 (한 번만 열면 이후 자동 재연결):\n");
   qrcode.generate(url, { small: true });

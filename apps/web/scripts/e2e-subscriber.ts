@@ -43,7 +43,7 @@ async function token(): Promise<string> {
   const r = await fetch(`${cfg.apiUrl}/api/realtime-token`, {
     method: "POST",
     headers: { "content-type": "application/json" },
-    body: JSON.stringify({ pairingToken: cfg.pairingToken }),
+    body: JSON.stringify({ namespace: cfg.namespace }),
   });
   if (!r.ok) throw new Error(`realtime-token ${r.status}`);
   return ((await r.json()) as { token: string }).token;

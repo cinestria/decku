@@ -56,7 +56,7 @@ export class BridgeRealtime {
   }
 
   private async refreshToken(): Promise<void> {
-    const token = await apiRealtimeToken(this.cfg.apiUrl, this.cfg.pairingToken);
+    const token = await apiRealtimeToken(this.cfg.apiUrl, this.cfg.namespace);
     await this.supabase.realtime.setAuth(token);
   }
 

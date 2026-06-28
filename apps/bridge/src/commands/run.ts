@@ -64,7 +64,7 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   });
 
   // 페어링 QR — 폰/웹에서 스캔해 열기 (Claude Remote처럼). namespace는 고정이라 항상 같은 코드.
-  const pairUrl = `${cfg.apiUrl}/#ns=${cfg.namespace}&pt=${encodeURIComponent(cfg.pairingToken)}&k=${cfg.e2eeKey}`;
+  const pairUrl = `${cfg.apiUrl}/#ns=${cfg.namespace}&k=${cfg.e2eeKey}`;
   console.log(`\n${BOLD}폰/웹에서 스캔해 열기:${RESET}`);
   qrcode.generate(pairUrl, { small: true });
   console.log(`${DIM}  ${pairUrl}${RESET}\n`);

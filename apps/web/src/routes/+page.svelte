@@ -79,7 +79,7 @@
   /** 현재 페어링을 QR로 — 폰 카메라로 찍으면 폰에서 decku가 열림. */
   async function showPhoneQr() {
     if (!pairing) return;
-    const link = `${location.origin}/#ns=${pairing.ns}&pt=${encodeURIComponent(pairing.pt)}&k=${pairing.k}`;
+    const link = `${location.origin}/#ns=${pairing.ns}&k=${pairing.k}`;
     qrUrl = await QRCode.toDataURL(link, { width: 280, margin: 2 });
   }
 

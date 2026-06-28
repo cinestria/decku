@@ -92,7 +92,7 @@ export class DeckuClient {
     const r = await fetch("/api/realtime-token", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ pairingToken: this.p.pt }),
+      body: JSON.stringify({ namespace: this.p.ns }),
     });
     if (!r.ok) throw new Error(`realtime-token ${r.status}`);
     const { token } = (await r.json()) as { token: string };
