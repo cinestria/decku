@@ -14,6 +14,7 @@ import { loadConfig } from "../lib/config.js";
 import { BridgeRealtime } from "../lib/realtime.js";
 
 const POLL_MS = 1000;
+const HEARTBEAT_MS = 4000; // 늦게 접속한 브라우저도 목록 받도록 주기적 재전송 (broadcast는 replay 없음)
 const BACKFILL_CHUNK = 40; // 이벤트/청크 (메시지 크기 한도 회피)
 const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
@@ -101,17 +102,18 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   process.on("SIGTERM", stop);
 
   let lastSessionsJson = "";
+  let lastPublish = 0;
   while (!stopped) {
     const live = await liveSessions(await scanSessions());
     liveMap = new Map(live.map((s) => [s.sessionId, s]));
 
-    // 세션 목록 변화 시에만 publish
+    // 목록 변화 시 또는 heartbeat 주기마다 publish (늦은 접속자 대비)
     const items = live.map(toListItem);
     const json = JSON.stringify(items);
-    if (json !== lastSessionsJson) {
+    if (json !== lastSessionsJson || Date.now() - lastPublish > HEARTBEAT_MS) {
       lastSessionsJson = json;
+      lastPublish = Date.now();
       await rt.publishSessions({ type: "sessions", items });
-      console.log(`${DIM}↑ sessions: ${items.length}${RESET}`);
     }
 
     // active 세션 live append
