@@ -69,11 +69,13 @@ function join(topic: string, onMsg?: (env: EncryptedEnvelope) => void, attempt =
 await sb.realtime.setAuth(await token());
 
 let sessions: SessionListItem[] = [];
+let historyItems: SessionListItem[] = [];
 let cipherSample = "";
 await join(sessionsChannel(cfg.namespace), async (env) => {
   if (!cipherSample) cipherSample = env.ct.slice(0, 48);
-  const p = await decrypt<SessionsPayload>(key, env);
+  const p = await decrypt<SessionsPayload | { type: "history"; items: SessionListItem[] }>(key, env);
   if (p.type === "sessions") sessions = p.items;
+  else if (p.type === "history") historyItems = p.items;
 });
 const cmdCh = await join(cmdChannel(cfg.namespace));
 
@@ -116,7 +118,15 @@ if (firstText && firstText.kind === "message") {
   if (t && t.type === "text") console.log(`  복호 샘플: "${t.text.slice(0, 60)}…"`);
 }
 
-const pass = sessions.length > 0 && txEvents.length > 0 && done;
-console.log(`\n${pass ? "✓ PASS — 브릿지→relay→브라우저 E2EE 왕복 동작" : "✗ 확인 필요"}`);
+// history 요청
+await cmdCh.send({ type: "broadcast", event: "msg", payload: await encrypt(key, { op: "history", limit: 40 }) });
+for (let i = 0; i < 30 && historyItems.length === 0; i++) await sleep(500);
+console.log(`\n기록 수신: ${historyItems.length}개 (최근순)`);
+for (const s of historyItems.slice(0, 5)) {
+  console.log(`  ${s.live ? "●" : "○"} ${s.title ?? "(제목없음)"}  —  ${s.cwd.split("/").pop()}`);
+}
+
+const pass = sessions.length > 0 && txEvents.length > 0 && done && historyItems.length > 0;
+console.log(`\n${pass ? "✓ PASS — 읽기 왕복 + 기록 모두 동작" : "✗ 확인 필요"}`);
 await sb.removeAllChannels();
 process.exit(pass ? 0 : 1);

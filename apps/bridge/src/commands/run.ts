@@ -15,6 +15,7 @@ import { loadConfig } from "../lib/config.js";
 import { BridgeRealtime } from "../lib/realtime.js";
 import { injectMessage } from "../lib/inject.js";
 import { TitleCache } from "../lib/titles.js";
+import { historyList, findTranscript } from "../lib/history.js";
 
 const POLL_MS = 1000;
 const HEARTBEAT_MS = 4000; // 늦게 접속한 브라우저도 목록 받도록 주기적 재전송 (broadcast는 replay 없음)
@@ -72,12 +73,14 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   async function handleCmd(cmd: CmdPayload): Promise<void> {
     if (cmd.op === "load") {
       const s = liveMap.get(cmd.sessionId);
-      if (!s) {
-        console.log(`${DIM}load: 비활성 세션 ${shortId(cmd.sessionId)} 무시${RESET}`);
+      // live면 registry 경로, 아니면 과거 transcript에서 탐색
+      const path = s ? transcriptPath(s) : (await findTranscript(cmd.sessionId))?.path;
+      if (!path) {
+        console.log(`${DIM}load: 세션 ${shortId(cmd.sessionId)} 못 찾음${RESET}`);
         return;
       }
       // 전체 백필 (청크 분할)
-      const all = await new TranscriptTail(transcriptPath(s)).init(true);
+      const all = await new TranscriptTail(path).init(true);
       const chunks = chunk(all, BACKFILL_CHUNK);
       for (let i = 0; i < chunks.length; i++) {
         const payload: TxPayload = {
@@ -93,29 +96,36 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
         await rt.publishTx({ type: "tx", sessionId: cmd.sessionId, events: [], seq: 0, done: true });
       }
       console.log(`${DIM}backfill ${shortId(cmd.sessionId)}: ${all.length} events (${chunks.length} chunks)${RESET}`);
-      // 이후 live append 추적
-      if (!activeTails.has(cmd.sessionId)) {
-        const t = new TranscriptTail(transcriptPath(s));
+      // live 세션만 이후 append 추적 (과거 세션은 append 없음)
+      if (s && !activeTails.has(cmd.sessionId)) {
+        const t = new TranscriptTail(path);
         await t.init(false);
         activeTails.set(cmd.sessionId, t);
       }
     } else if (cmd.op === "send") {
+      // live면 그 cwd, 아니면 과거 transcript의 cwd로 resume (닫힌 대화 이어가기)
       const s = liveMap.get(cmd.sessionId);
-      if (!s) {
-        console.log(`${DIM}send: 비활성 세션 ${shortId(cmd.sessionId)} 무시${RESET}`);
+      const found = s ? { cwd: s.cwd, path: transcriptPath(s) } : await findTranscript(cmd.sessionId);
+      if (!found) {
+        console.log(`${DIM}send: 세션 ${shortId(cmd.sessionId)} 못 찾음${RESET}`);
         return;
       }
       // 응답 append를 tx로 흘리도록 tail 보장
       if (!activeTails.has(cmd.sessionId)) {
-        const t = new TranscriptTail(transcriptPath(s));
+        const t = new TranscriptTail(found.path);
         await t.init(false);
         activeTails.set(cmd.sessionId, t);
       }
-      console.log(`${DIM}↓ send ${shortId(cmd.sessionId)}: "${cmd.text.slice(0, 40)}"${RESET}`);
+      const imgN = cmd.images?.length ?? 0;
+      console.log(`${DIM}↓ send ${shortId(cmd.sessionId)}: "${cmd.text.slice(0, 40)}"${imgN ? ` (+${imgN} img)` : ""}${RESET}`);
       // 한 턴(응답까지)이라 시간 소요 → fire-and-forget, append는 tail이 publish
-      injectMessage(s.cwd, cmd.sessionId, cmd.text)
+      injectMessage(found.cwd, cmd.sessionId, cmd.text, cmd.images)
         .then(() => console.log(`${DIM}  inject 완료 ${shortId(cmd.sessionId)}${RESET}`))
         .catch((e) => console.error("inject 실패:", (e as Error).message));
+    } else if (cmd.op === "history") {
+      const items = await historyList(cmd.limit ?? 40);
+      await rt.publishHistory({ type: "history", items });
+      console.log(`${DIM}↑ history: ${items.length}${RESET}`);
     }
   }
 

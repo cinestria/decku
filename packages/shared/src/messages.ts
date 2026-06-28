@@ -44,12 +44,26 @@ const RenderEventSchema = z.discriminatedUnion("kind", [
   }),
 ]);
 
-/** sessions 채널: 브릿지 → 브라우저, 현재 세션 목록. */
+/** sessions 채널: 브릿지 → 브라우저, 현재 live 세션 목록. */
 export const SessionsPayloadSchema = z.object({
   type: z.literal("sessions"),
   items: z.array(SessionListItemSchema),
 });
 export type SessionsPayload = z.infer<typeof SessionsPayloadSchema>;
+
+/** sessions 채널: 브릿지 → 브라우저, 과거 세션 기록(on-demand, 최근순). */
+export const HistoryPayloadSchema = z.object({
+  type: z.literal("history"),
+  items: z.array(SessionListItemSchema),
+});
+export type HistoryPayload = z.infer<typeof HistoryPayloadSchema>;
+
+/** 첨부 이미지 (base64). */
+export const ImageAttachmentSchema = z.object({
+  mediaType: z.string(), // image/png 등
+  dataBase64: z.string(),
+});
+export type ImageAttachment = z.infer<typeof ImageAttachmentSchema>;
 
 /**
  * tx:<sessionId> 채널: 브릿지 → 브라우저, transcript 이벤트.
@@ -69,7 +83,14 @@ export type TxPayload = z.infer<typeof TxPayloadSchema>;
 export const CmdPayloadSchema = z.discriminatedUnion("op", [
   // 세션 transcript backfill 요청
   z.object({ op: z.literal("load"), sessionId: z.string() }),
-  // 채팅 전송 (Agent SDK resume 로 주입)
-  z.object({ op: z.literal("send"), sessionId: z.string(), text: z.string() }),
+  // 채팅 전송 (resume 로 주입). 이미지 첨부 가능.
+  z.object({
+    op: z.literal("send"),
+    sessionId: z.string(),
+    text: z.string(),
+    images: z.array(ImageAttachmentSchema).optional(),
+  }),
+  // 과거 세션 기록 요청
+  z.object({ op: z.literal("history"), limit: z.number().optional() }),
 ]);
 export type CmdPayload = z.infer<typeof CmdPayloadSchema>;

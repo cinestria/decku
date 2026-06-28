@@ -18,6 +18,7 @@ import {
   cmdChannel,
   type EncryptedEnvelope,
   type SessionsPayload,
+  type HistoryPayload,
   type TxPayload,
   type CmdPayload,
 } from "@decku/shared";
@@ -94,6 +95,11 @@ export class BridgeRealtime {
   }
 
   async publishSessions(payload: SessionsPayload): Promise<void> {
+    const env = await encrypt(this.key, payload);
+    await this.sessionsCh.send({ type: "broadcast", event: "msg", payload: env });
+  }
+
+  async publishHistory(payload: HistoryPayload): Promise<void> {
     const env = await encrypt(this.key, payload);
     await this.sessionsCh.send({ type: "broadcast", event: "msg", payload: env });
   }

@@ -4,7 +4,8 @@
   import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
   import { loadPairing, clearPairing, savePairingFromUrl, type Pairing } from "$lib/pairing";
   import { DeckuClient } from "$lib/realtime-client";
-  import type { SessionListItem, RenderEvent, TxPayload } from "@decku/shared";
+  import { fileToAttachment } from "$lib/image";
+  import type { SessionListItem, RenderEvent, TxPayload, ImageAttachment } from "@decku/shared";
 
   let pairing = $state<Pairing | null>(null);
   let status = $state("초기화…");
@@ -12,10 +13,14 @@
   let online = $state(false); // 브릿지 heartbeat 수신 중인가
   let lastSeen = 0; // 마지막 세션목록 수신 시각 (비반응)
   let sessions = $state<SessionListItem[]>([]);
+  let view = $state<"live" | "history">("live");
+  let history = $state<SessionListItem[]>([]);
+  let historyLoading = $state(false);
   let selected = $state<string | null>(null);
   let events = $state<RenderEvent[]>([]);
   let loading = $state(false);
   let draft = $state("");
+  let pendingImages = $state<{ att: ImageAttachment; url: string }[]>([]);
   let sending = $state(false);
   let client: DeckuClient | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
@@ -97,9 +102,15 @@
     pairing = p;
     client = new DeckuClient(p);
     try {
-      await client.start((items) => {
-        sessions = items;
-        lastSeen = Date.now();
+      await client.start({
+        onSessions: (items) => {
+          sessions = items;
+          lastSeen = Date.now();
+        },
+        onHistory: (items) => {
+          history = items;
+          historyLoading = false;
+        },
       });
       connected = true;
       status = `namespace ${p.ns.slice(0, 8)}…`;
@@ -129,14 +140,44 @@
     });
   }
 
+  function openHistory() {
+    if (!client) return;
+    view = "history";
+    if (history.length === 0) {
+      historyLoading = true;
+      void client.requestHistory(40);
+    }
+  }
+
+  async function addImages(e: Event) {
+    const input = e.target as HTMLInputElement;
+    const files = Array.from(input.files ?? []);
+    input.value = "";
+    for (const f of files) {
+      try {
+        const att = await fileToAttachment(f);
+        pendingImages = [...pendingImages, { att, url: `data:${att.mediaType};base64,${att.dataBase64}` }];
+      } catch (err) {
+        console.error("이미지 처리 실패:", err);
+      }
+    }
+  }
+
+  function removeImage(i: number) {
+    pendingImages = pendingImages.filter((_, idx) => idx !== i);
+  }
+
   async function send(e: Event) {
     e.preventDefault();
-    if (!client || !selected || !draft.trim() || sending) return;
+    if (!client || !selected || sending) return;
+    if (!draft.trim() && pendingImages.length === 0) return;
     const text = draft;
+    const imgs = pendingImages.map((p) => p.att);
     draft = "";
+    pendingImages = [];
     sending = true;
     try {
-      await client.sendChat(selected, text);
+      await client.sendChat(selected, text, imgs);
     } finally {
       sending = false;
     }
@@ -212,18 +253,32 @@
 {:else}
   <div class="layout">
     <aside>
-      <h3>세션 {sessions.length}</h3>
-      {#if connected && !online}
-        <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku run</code> 확인.</p>
-      {:else if sessions.length === 0}
-        <p class="muted">대기 중…</p>
+      <div class="tabs">
+        <button class:sel={view === "live"} onclick={() => (view = "live")}>● Live {sessions.length}</button>
+        <button class:sel={view === "history"} onclick={openHistory}>기록</button>
+      </div>
+
+      {#if view === "live"}
+        {#if connected && !online}
+          <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku run</code> 확인.</p>
+        {:else if sessions.length === 0}
+          <p class="muted">대기 중…</p>
+        {/if}
+        {#each sessions as s (s.sessionId)}
+          <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
+            <span class="cwd">{s.title ?? cwdName(s.cwd)}</span>
+            <span class="path">{cwdName(s.cwd)}</span>
+          </button>
+        {/each}
+      {:else}
+        {#if historyLoading}<p class="muted">기록 불러오는 중…</p>{/if}
+        {#each history as s (s.sessionId)}
+          <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
+            <span class="cwd">{s.live ? "● " : ""}{s.title ?? cwdName(s.cwd)}</span>
+            <span class="path">{cwdName(s.cwd)}</span>
+          </button>
+        {/each}
       {/if}
-      {#each sessions as s (s.sessionId)}
-        <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
-          <span class="cwd">{s.title ?? cwdName(s.cwd)}</span>
-          <span class="path">{cwdName(s.cwd)}</span>
-        </button>
-      {/each}
     </aside>
 
     <section class="convo">
@@ -251,9 +306,25 @@
             {/if}
           {/each}
         </div>
+        {#if pendingImages.length > 0}
+          <div class="thumbs">
+            {#each pendingImages as p, i (i)}
+              <div class="thumb">
+                <img src={p.url} alt="첨부" />
+                <button type="button" class="rm" onclick={() => removeImage(i)}>×</button>
+              </div>
+            {/each}
+          </div>
+        {/if}
         <form class="composer" onsubmit={send}>
-          <input bind:value={draft} placeholder="메시지를 입력하면 이 세션에 전달됩니다…" disabled={sending} />
-          <button type="submit" disabled={!draft.trim() || sending}>{sending ? "…" : "전송"}</button>
+          <label class="attach" title="이미지 첨부">
+            🖼
+            <input type="file" accept="image/*" multiple onchange={addImages} hidden />
+          </label>
+          <input bind:value={draft} placeholder="메시지 입력 (이미지 첨부 가능)…" disabled={sending} />
+          <button type="submit" disabled={(!draft.trim() && pendingImages.length === 0) || sending}>
+            {sending ? "…" : "전송"}
+          </button>
         </form>
       {/if}
     </section>
@@ -285,7 +356,9 @@
   .empty { max-width: 36rem; margin: 4rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
   .layout { display: grid; grid-template-columns: 18rem 1fr; height: calc(100vh - 49px); font-family: system-ui, sans-serif; }
   aside { border-right: 1px solid #e5e5e5; overflow-y: auto; padding: 0.5rem; }
-  aside h3 { font-size: 0.8rem; color: #888; text-transform: uppercase; margin: 0.5rem; }
+  .tabs { display: flex; gap: 0.3rem; padding: 0.4rem 0.5rem; }
+  .tabs button { flex: 1; font-size: 0.8rem; padding: 0.35rem; border: 1px solid #ddd; background: #fafafa; border-radius: 6px; cursor: pointer; }
+  .tabs button.sel { background: #e8f0fe; border-color: #1a73e8; color: #1a73e8; }
   .session { display: block; width: 100%; text-align: left; border: 0; background: none; padding: 0.5rem; border-radius: 6px; cursor: pointer; }
   .session:hover { background: #f3f3f3; }
   .session.active { background: #e8f0fe; }
@@ -293,7 +366,12 @@
   .session .path { display: block; color: #999; font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .convo { display: flex; flex-direction: column; overflow: hidden; }
   .convo .scroll { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
-  .composer { display: flex; gap: 0.5rem; padding: 0.6rem 1rem; border-top: 1px solid #e5e5e5; }
+  .thumbs { display: flex; gap: 0.4rem; padding: 0.4rem 1rem 0; flex-wrap: wrap; }
+  .thumb { position: relative; }
+  .thumb img { height: 56px; border-radius: 6px; display: block; }
+  .thumb .rm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: #333; color: #fff; cursor: pointer; line-height: 1; padding: 0; }
+  .composer { display: flex; gap: 0.5rem; padding: 0.6rem 1rem; border-top: 1px solid #e5e5e5; align-items: center; }
+  .attach { cursor: pointer; font-size: 1.2rem; user-select: none; }
   .composer input { flex: 1; padding: 0.5rem 0.7rem; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; }
   .composer button { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #1a73e8; background: #1a73e8; color: #fff; cursor: pointer; }
   .composer button:disabled { opacity: 0.5; cursor: default; }
