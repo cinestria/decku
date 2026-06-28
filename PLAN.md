@@ -50,7 +50,7 @@ decku/
 
 언어는 **Node/TS 확정** — 전송이 Claude Agent SDK(JS 생태계)이고, `claude` CLI(Claude Desktop이 설치)가 어차피 로컬에 필요하므로 Node 의존은 추가 부담이 아님.
 
-- **1순위: npm 패키지 `@decku/bridge` + `npx`.** 한 코드베이스로 Mac/Win/Linux, 설치 없이 최신 실행, `npm publish` 한 줄. brew/scoop/winget은 이걸 감싸는 얇은 래퍼(M5).
+- **1순위: npm 패키지 `decku` + `npx`.** 한 코드베이스로 Mac/Win/Linux, 설치 없이 최신 실행, `npm publish` 한 줄. brew/scoop/winget은 이걸 감싸는 얇은 래퍼(M5).
 - **CLI는 서브커맨드 구조**로 설계:
   - `pair <code>` — 페어링 코드 제출 → device token 수령·로컬 저장
   - `run` — watch + realtime 데몬 (기본)
@@ -157,7 +157,7 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 - 참고: `-p` 세션은 registry 미등록 → decku 목록엔 Desktop/interactive 세션만. 브라우저 실시간 데모는 실세션에서(주입은 사용자 선택).
 
 ### M5 — 배포 준비 ✅ 완료 (최종 publish/deploy는 사용자 계정 단계)
-- 브릿지 **tsup 번들**(shared 인라인) → `dist/cli.js`(shebang), `npx @decku/bridge` 단독 동작 확인. bin/files/publishConfig 정리.
+- 브릿지 **tsup 번들**(shared 인라인) → `dist/cli.js`(shebang), `npx decku` 단독 동작 확인. bin/files/publishConfig 정리.
 - `install`/`uninstall`: macOS **launchd** autostart.
 - 루트/브릿지/웹 **README**(Vercel 배포·npx·Supabase 셋업) + 보안 체크리스트 점검.
 - ⏭ 사용자 단계: Vercel 배포(env 3개) + `npm publish`(npm 로그인). 그 후 프로덕션 URL로 페어링하면 전 흐름 동작.

@@ -6,7 +6,7 @@
  *   run [sessionId]         watch + realtime publish (기본). 미페어링 시 콘솔 모드
  *   install / uninstall     부팅 시 자동 시작 등록/해제 (macOS launchd)
  *
- * npm 패키지 `@decku/bridge` 로 배포, `npx @decku/bridge <cmd>` 로 실행.
+ * npm 패키지 `decku` 로 배포, `npx decku <cmd>` 로 실행.
  */
 import { run } from "./commands/run.js";
 import { pair } from "./commands/pair.js";
