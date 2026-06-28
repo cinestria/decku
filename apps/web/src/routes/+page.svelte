@@ -10,6 +10,8 @@
   let selected = $state<string | null>(null);
   let events = $state<RenderEvent[]>([]);
   let loading = $state(false);
+  let draft = $state("");
+  let sending = $state(false);
   let client: DeckuClient | null = null;
 
   function cwdName(cwd: string): string {
@@ -49,6 +51,19 @@
     });
   }
 
+  async function send(e: Event) {
+    e.preventDefault();
+    if (!client || !selected || !draft.trim() || sending) return;
+    const text = draft;
+    draft = "";
+    sending = true;
+    try {
+      await client.sendChat(selected, text);
+    } finally {
+      sending = false;
+    }
+  }
+
   function unpair() {
     clearPairing();
     location.reload();
@@ -85,25 +100,31 @@
       {#if !selected}
         <p class="muted center">세션을 선택하세요.</p>
       {:else}
-        {#if loading}<p class="muted">불러오는 중…</p>{/if}
-        {#each events as ev, i (i)}
-          {#if ev.kind === "title"}
-            <div class="title">⭐ {ev.title}</div>
-          {:else}
-            <div class="msg {ev.role}">
-              <span class="who">{ev.role}</span>
-              <div class="blocks">
-                {#each ev.blocks as b}
-                  {#if b.type === "text"}<p>{b.text}</p>
-                  {:else if b.type === "thinking"}<p class="thinking">{b.text}</p>
-                  {:else if b.type === "tool_use"}<p class="tool">⚙ {b.name}</p>
-                  {:else if b.type === "tool_result"}<p class="tool">↳ {b.text.slice(0, 300)}</p>
-                  {:else if b.type === "image"}<p class="tool">[image]</p>{/if}
-                {/each}
+        <div class="scroll">
+          {#if loading}<p class="muted">불러오는 중…</p>{/if}
+          {#each events as ev, i (i)}
+            {#if ev.kind === "title"}
+              <div class="title">⭐ {ev.title}</div>
+            {:else}
+              <div class="msg {ev.role}">
+                <span class="who">{ev.role}</span>
+                <div class="blocks">
+                  {#each ev.blocks as b}
+                    {#if b.type === "text"}<p>{b.text}</p>
+                    {:else if b.type === "thinking"}<p class="thinking">{b.text}</p>
+                    {:else if b.type === "tool_use"}<p class="tool">⚙ {b.name}</p>
+                    {:else if b.type === "tool_result"}<p class="tool">↳ {b.text.slice(0, 300)}</p>
+                    {:else if b.type === "image"}<p class="tool">[image]</p>{/if}
+                  {/each}
+                </div>
               </div>
-            </div>
-          {/if}
-        {/each}
+            {/if}
+          {/each}
+        </div>
+        <form class="composer" onsubmit={send}>
+          <input bind:value={draft} placeholder="메시지를 입력하면 이 세션에 전달됩니다…" disabled={sending} />
+          <button type="submit" disabled={!draft.trim() || sending}>{sending ? "…" : "전송"}</button>
+        </form>
       {/if}
     </section>
   </div>
@@ -127,7 +148,12 @@
   .session.active { background: #e8f0fe; }
   .session .cwd { display: block; font-weight: 600; font-size: 0.9rem; }
   .session .path { display: block; color: #999; font-size: 0.7rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-  .convo { overflow-y: auto; padding: 1rem 1.5rem; }
+  .convo { display: flex; flex-direction: column; overflow: hidden; }
+  .convo .scroll { flex: 1; overflow-y: auto; padding: 1rem 1.5rem; }
+  .composer { display: flex; gap: 0.5rem; padding: 0.6rem 1rem; border-top: 1px solid #e5e5e5; }
+  .composer input { flex: 1; padding: 0.5rem 0.7rem; border: 1px solid #ccc; border-radius: 6px; font-size: 0.9rem; }
+  .composer button { padding: 0.5rem 1rem; border-radius: 6px; border: 1px solid #1a73e8; background: #1a73e8; color: #fff; cursor: pointer; }
+  .composer button:disabled { opacity: 0.5; cursor: default; }
   .muted { color: #999; }
   .center { text-align: center; margin-top: 3rem; }
   .title { font-weight: 700; margin: 0.5rem 0 1rem; }

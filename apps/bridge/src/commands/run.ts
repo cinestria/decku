@@ -12,6 +12,7 @@ import { TranscriptTail } from "../lib/tail.js";
 import { renderEvent } from "../lib/render.js";
 import { loadConfig } from "../lib/config.js";
 import { BridgeRealtime } from "../lib/realtime.js";
+import { injectMessage } from "../lib/inject.js";
 
 const POLL_MS = 1000;
 const HEARTBEAT_MS = 4000; // 늦게 접속한 브라우저도 목록 받도록 주기적 재전송 (broadcast는 replay 없음)
@@ -90,7 +91,22 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
         activeTails.set(cmd.sessionId, t);
       }
     } else if (cmd.op === "send") {
-      console.log(`${DIM}send(M4 예정): ${shortId(cmd.sessionId)} "${cmd.text.slice(0, 40)}"${RESET}`);
+      const s = liveMap.get(cmd.sessionId);
+      if (!s) {
+        console.log(`${DIM}send: 비활성 세션 ${shortId(cmd.sessionId)} 무시${RESET}`);
+        return;
+      }
+      // 응답 append를 tx로 흘리도록 tail 보장
+      if (!activeTails.has(cmd.sessionId)) {
+        const t = new TranscriptTail(transcriptPath(s));
+        await t.init(false);
+        activeTails.set(cmd.sessionId, t);
+      }
+      console.log(`${DIM}↓ send ${shortId(cmd.sessionId)}: "${cmd.text.slice(0, 40)}"${RESET}`);
+      // 한 턴(응답까지)이라 시간 소요 → fire-and-forget, append는 tail이 publish
+      injectMessage(s.cwd, cmd.sessionId, cmd.text)
+        .then(() => console.log(`${DIM}  inject 완료 ${shortId(cmd.sessionId)}${RESET}`))
+        .catch((e) => console.error("inject 실패:", (e as Error).message));
     }
   }
 

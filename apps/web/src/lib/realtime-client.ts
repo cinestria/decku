@@ -55,6 +55,11 @@ export class DeckuClient {
     await this.sendCmd({ op: "load", sessionId: sid });
   }
 
+  /** 채팅 전송: 브릿지가 claude --resume로 주입. */
+  async sendChat(sessionId: string, text: string): Promise<void> {
+    await this.sendCmd({ op: "send", sessionId, text });
+  }
+
   private async sendCmd(cmd: CmdPayload): Promise<void> {
     if (!this.cmdCh) throw new Error("cmd 채널 미연결");
     const env = await encrypt(this.key, cmd);
