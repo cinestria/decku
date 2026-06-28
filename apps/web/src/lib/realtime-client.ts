@@ -3,7 +3,7 @@
  * cmd는 암호화해 publish (load 요청 등).
  */
 import { createClient, type SupabaseClient, type RealtimeChannel } from "@supabase/supabase-js";
-import { PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY } from "$env/static/public";
+import { env } from "$env/dynamic/public";
 import {
   importKey,
   encrypt,
@@ -27,7 +27,12 @@ export class DeckuClient {
   private txCh?: RealtimeChannel;
 
   constructor(private p: Pairing) {
-    this.sb = createClient(PUBLIC_SUPABASE_URL, PUBLIC_SUPABASE_ANON_KEY, {
+    const url = env.PUBLIC_SUPABASE_URL;
+    const anon = env.PUBLIC_SUPABASE_ANON_KEY;
+    if (!url || !anon) {
+      throw new Error("PUBLIC_SUPABASE_URL / PUBLIC_SUPABASE_ANON_KEY 미설정 (Vercel env)");
+    }
+    this.sb = createClient(url, anon, {
       auth: { persistSession: false, autoRefreshToken: false },
     });
   }
