@@ -140,10 +140,10 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 - Realtime Authorization RLS(`supabase/migrations/0001`): `topic namespace == JWT claim`. `apply-rls` 스크립트로 적용. `namespaces` 테이블 `db:migrate`로 생성.
 - ✅ **실측 격리 통과**: nsA 토큰 → `tenant:nsA` SUBSCRIBED, `tenant:nsB` Unauthorized(RLS 거부). **레거시 HS256 토큰을 Realtime이 검증함**(third-party JWT 불필요).
 
-### M2.5 — E2EE 키교환 + 봉투 (0.5d)
-- `packages/shared`: 암호화 봉투(AES-GCM, WebCrypto/libsodium) encrypt/decrypt + 유닛테스트.
-- 페어링에 마스터 시크릿 동봉(4-A). 브릿지/브라우저 키 보관.
-- ✅ 브릿지가 암호화 → 브라우저가 복호 성공. 같은 페이로드를 Supabase 대시보드에서 보면 ciphertext.
+### M2.5 — E2EE 봉투 ✅ 완료 (키교환 배선은 M3)
+- `packages/shared/crypto.ts`: AES-256-GCM(WebCrypto) `encrypt`/`decrypt` + 키 `generate/import` + QR용 `encodeKey/decodeKey`(base64url). 브릿지(Node)·브라우저 공용.
+- ✅ 유닛테스트 8개: 왕복·ciphertext 노출 없음·다른 키 거부·GCM 위변조 거부·iv 매번 다름·키 길이 검증.
+- 다음(M3): 페어링 QR에 e2eeKey 동봉 + publish 전 encrypt / 수신 후 decrypt 배선.
 
 ### M3 — realtime 읽기 왕복 (QR 페어링, 암호화) (1.5d)
 - 브릿지: `pair`로 QR 표시 → realtime JWT → `sessions`/`tx` 채널에 **암호화 페이로드** publish.
