@@ -28,8 +28,7 @@ async function main(): Promise<void> {
       await import("./commands/run.js").then((m) => m.run(rest));
       break;
     case "pair":
-      console.error("pair: M3에서 구현 예정 (code:", rest[0] ?? "<없음>", ")");
-      process.exitCode = 1;
+      await import("./commands/pair.js").then((m) => m.pair(rest));
       break;
     case "install":
     case "uninstall":
