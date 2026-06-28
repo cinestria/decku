@@ -1,5 +1,6 @@
 <script lang="ts">
   import { onMount, onDestroy } from "svelte";
+  import QRCode from "qrcode";
   import { loadPairing, clearPairing, type Pairing } from "$lib/pairing";
   import { DeckuClient } from "$lib/realtime-client";
   import type { SessionListItem, RenderEvent, TxPayload } from "@decku/shared";
@@ -17,9 +18,17 @@
   let sending = $state(false);
   let client: DeckuClient | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+  let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
 
   function cwdName(cwd: string): string {
     return cwd.split("/").filter(Boolean).pop() ?? cwd;
+  }
+
+  /** 현재 페어링을 QR로 — 폰 카메라로 찍으면 폰에서 decku가 열림. */
+  async function showPhoneQr() {
+    if (!pairing) return;
+    const link = `${location.origin}/#ns=${pairing.ns}&pt=${encodeURIComponent(pairing.pt)}&k=${pairing.k}`;
+    qrUrl = await QRCode.toDataURL(link, { width: 280, margin: 2 });
   }
 
   onMount(async () => {
@@ -89,8 +98,29 @@
   {:else}
     <span class="status">{status}</span>
   {/if}
-  {#if pairing}<button onclick={unpair}>연결 해제</button>{/if}
+  {#if pairing}
+    <button class="phone-btn" onclick={showPhoneQr}>📱 폰에서 열기</button>
+    <button onclick={unpair}>연결 해제</button>
+  {/if}
 </header>
+
+{#if qrUrl}
+  <div
+    class="qr-overlay"
+    role="button"
+    tabindex="0"
+    onclick={() => (qrUrl = null)}
+    onkeydown={(e) => e.key === "Escape" && (qrUrl = null)}
+  >
+    <div class="qr-card" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+      <h3>폰에서 열기</h3>
+      <p class="muted">폰 카메라로 QR을 찍으면 이 화면이 폰에서 열립니다.</p>
+      <img src={qrUrl} alt="페어링 QR" width="280" height="280" />
+      <p class="muted small">같은 페어링(같은 namespace) — e2eeKey가 들어있으니 본인 기기만.</p>
+      <button onclick={() => (qrUrl = null)}>닫기</button>
+    </div>
+  </div>
+{/if}
 
 {#if !pairing}
   <main class="empty">
@@ -159,7 +189,14 @@
   .dot { width: 8px; height: 8px; border-radius: 50%; background: #c00; display: inline-block; }
   .dot.on { background: #1a9d3b; }
   .offline-hint { color: #b00; font-size: 0.8rem; padding: 0.4rem 0.5rem; background: #fff4f4; border-radius: 6px; }
-  header button { margin-left: auto; font-size: 0.8rem; }
+  header button { font-size: 0.8rem; }
+  .phone-btn { margin-left: auto; }
+  .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
+  .qr-card { background: #fff; border-radius: 12px; padding: 1.5rem; text-align: center; max-width: 90vw; }
+  .qr-card h3 { margin: 0 0 0.3rem; }
+  .qr-card img { display: block; margin: 0.75rem auto; }
+  .qr-card .small { font-size: 0.72rem; }
+  .qr-card button { margin-top: 0.5rem; padding: 0.4rem 1.2rem; }
   .empty { max-width: 36rem; margin: 4rem auto; padding: 0 1rem; font-family: system-ui, sans-serif; }
   .layout { display: grid; grid-template-columns: 18rem 1fr; height: calc(100vh - 49px); font-family: system-ui, sans-serif; }
   aside { border-right: 1px solid #e5e5e5; overflow-y: auto; padding: 0.5rem; }

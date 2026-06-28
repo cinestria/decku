@@ -14,10 +14,12 @@
   "dependencies": {
     "@decku/shared": "workspace:*",
     "@supabase/supabase-js": "^2.45.4",
-    "jose": "^5.9.6"
+    "jose": "^5.9.6",
+    "qrcode": "^1.5.4"
   },
   "devDependencies": {
     "@sveltejs/adapter-vercel": "^5.4.4",
+    "@types/qrcode": "^1.5.5",
     "@sveltejs/kit": "^2.7.0",
     "@sveltejs/vite-plugin-svelte": "^4.0.0",
     "svelte": "^5.0.0",
