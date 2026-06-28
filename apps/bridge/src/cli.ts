@@ -1,22 +1,24 @@
-#!/usr/bin/env node
 /**
  * decku 브릿지 CLI 진입점.
  *
  * 서브커맨드:
- *   pair <code>        페어링 코드 제출 → device token 수령·로컬 저장   (M3)
- *   run                watch + realtime 데몬 (기본)                      (M1 읽기 → M3 publish)
- *   install/uninstall  OS별 autostart 등록 (launchd/Task Scheduler/...)  (M5)
+ *   pair [--url <webUrl>]   웹앱에서 페어링(namespace+토큰) + e2eeKey 생성 + QR/URL 출력
+ *   run [sessionId]         watch + realtime publish (기본). 미페어링 시 콘솔 모드
+ *   install / uninstall     부팅 시 자동 시작 등록/해제 (macOS launchd)
  *
  * npm 패키지 `@decku/bridge` 로 배포, `npx @decku/bridge <cmd>` 로 실행.
  */
+import { run } from "./commands/run.js";
+import { pair } from "./commands/pair.js";
+import { install, uninstall } from "./commands/install.js";
 
 const USAGE = `decku-bridge — Claude Desktop 세션을 웹앱에 연결
 
 사용법:
-  decku-bridge run                  세션 watch + realtime (기본)
-  decku-bridge pair <code>          웹앱 페어링 코드로 이 Mac을 계정에 연결
-  decku-bridge install              부팅 시 자동 시작 등록
-  decku-bridge uninstall            자동 시작 해제
+  decku-bridge pair --url <webUrl>   웹앱과 페어링 (QR/URL 출력)
+  decku-bridge run                   세션 watch + realtime (기본)
+  decku-bridge install               부팅 시 자동 시작 등록 (macOS)
+  decku-bridge uninstall             자동 시작 해제
 `;
 
 async function main(): Promise<void> {
@@ -24,16 +26,16 @@ async function main(): Promise<void> {
 
   switch (cmd ?? "run") {
     case "run":
-      // M1: ~/.claude 읽기 → 콘솔. M3: realtime publish.
-      await import("./commands/run.js").then((m) => m.run(rest));
+      await run(rest);
       break;
     case "pair":
-      await import("./commands/pair.js").then((m) => m.pair(rest));
+      await pair(rest);
       break;
     case "install":
+      await install();
+      break;
     case "uninstall":
-      console.error(`${cmd}: M5에서 구현 예정`);
-      process.exitCode = 1;
+      await uninstall();
       break;
     case "-h":
     case "--help":

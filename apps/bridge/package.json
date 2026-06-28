@@ -1,24 +1,35 @@
 {
   "name": "@decku/bridge",
-  "version": "0.0.0",
-  "private": true,
+  "version": "0.1.0",
+  "description": "decku 브릿지 — Claude Desktop 세션을 웹앱에 연결 (로컬, E2EE)",
+  "license": "MIT",
+  "private": false,
   "type": "module",
   "bin": {
-    "decku-bridge": "./src/cli.ts"
+    "decku-bridge": "./dist/cli.js"
+  },
+  "files": ["dist", "README.md"],
+  "engines": {
+    "node": ">=20"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "scripts": {
     "dev": "tsx src/cli.ts",
-    "start": "tsx src/cli.ts",
+    "build": "tsup",
+    "prepublishOnly": "tsup",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "@decku/shared": "workspace:*",
     "@supabase/supabase-js": "^2.45.4",
     "qrcode-terminal": "^0.12.0"
   },
   "devDependencies": {
+    "@decku/shared": "workspace:*",
     "@types/node": "^22.5.0",
+    "tsup": "^8.3.0",
     "tsx": "^4.19.0",
     "typescript": "^5.5.4",
     "vitest": "^2.0.5"
