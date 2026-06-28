@@ -384,7 +384,7 @@
       <div class="badges">
         <span class="badge">⚡ 로그인 없음</span>
         <span class="badge">🔒 종단간 암호화</span>
-        <span class="badge">💸 무료·오픈소스</span>
+        <span class="badge">💸 무료</span>
       </div>
     </section>
 
@@ -424,7 +424,7 @@
       </div>
     </section>
 
-    <footer class="lfoot"><a href="https://github.com/cinestria/decku" target="_blank" rel="noreferrer">GitHub</a> · 무료 · 오픈소스</footer>
+    <footer class="lfoot">© decku · 무료</footer>
   </main>
 {:else}
   <div class="layout" class:has-sel={selected}>
