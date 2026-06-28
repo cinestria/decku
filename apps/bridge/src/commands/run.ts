@@ -6,6 +6,7 @@
  * 페어링 안 됨(또는 --console) → 콘솔 모드(M1): 로컬에서 목록+tail만 출력.
  */
 import { basename } from "node:path";
+import qrcode from "qrcode-terminal";
 import type { SessionFile, SessionListItem, TxPayload, CmdPayload, RenderEvent } from "@decku/shared";
 import { scanSessions, liveSessions, transcriptPath } from "../lib/sessions.js";
 import { TranscriptTail } from "../lib/tail.js";
@@ -60,6 +61,12 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   await rt.connect((cmd: CmdPayload) => {
     void handleCmd(cmd).catch((e) => console.error("cmd 처리 실패:", e));
   });
+
+  // 페어링 QR — 폰/웹에서 스캔해 열기 (Claude Remote처럼). namespace는 고정이라 항상 같은 코드.
+  const pairUrl = `${cfg.apiUrl}/#ns=${cfg.namespace}&pt=${encodeURIComponent(cfg.pairingToken)}&k=${cfg.e2eeKey}`;
+  console.log(`\n${BOLD}폰/웹에서 스캔해 열기:${RESET}`);
+  qrcode.generate(pairUrl, { small: true });
+  console.log(`${DIM}  ${pairUrl}${RESET}\n`);
   console.log(`${DIM}연결됨. watching… (Ctrl-C 종료)${RESET}`);
 
   async function handleCmd(cmd: CmdPayload): Promise<void> {

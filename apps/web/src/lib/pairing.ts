@@ -34,3 +34,21 @@ export function loadPairing(): Pairing | null {
 export function clearPairing(): void {
   localStorage.removeItem(STORE_KEY);
 }
+
+/** 스캔한 QR 텍스트(페어링 URL)에서 ns/pt/k 파싱해 저장. 성공 시 true. */
+export function savePairingFromUrl(text: string): boolean {
+  try {
+    const u = new URL(text);
+    const h = new URLSearchParams(u.hash.slice(1));
+    const ns = h.get("ns");
+    const pt = h.get("pt");
+    const k = h.get("k");
+    if (ns && pt && k) {
+      localStorage.setItem(STORE_KEY, JSON.stringify({ ns, pt, k }));
+      return true;
+    }
+  } catch {
+    /* invalid */
+  }
+  return false;
+}

@@ -1,0 +1,13 @@
+{
+  "name": "decku",
+  "short_name": "decku",
+  "description": "내 Claude Desktop 세션을 웹/폰에서 보고 조종",
+  "start_url": "/",
+  "scope": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#1a73e8",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }
+  ]
+}

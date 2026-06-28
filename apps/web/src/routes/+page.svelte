@@ -1,7 +1,8 @@
 <script lang="ts">
-  import { onMount, onDestroy } from "svelte";
+  import { onMount, onDestroy, tick } from "svelte";
   import QRCode from "qrcode";
-  import { loadPairing, clearPairing, type Pairing } from "$lib/pairing";
+  import { BrowserQRCodeReader, type IScannerControls } from "@zxing/browser";
+  import { loadPairing, clearPairing, savePairingFromUrl, type Pairing } from "$lib/pairing";
   import { DeckuClient } from "$lib/realtime-client";
   import type { SessionListItem, RenderEvent, TxPayload } from "@decku/shared";
 
@@ -20,8 +21,54 @@
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
 
+  // 카메라 스캐너 (페어링)
+  let scanning = $state(false);
+  let scanError = $state("");
+  let videoEl = $state<HTMLVideoElement | undefined>();
+  let scanControls: IScannerControls | null = null;
+
+  // PWA 설치
+  let installPrompt = $state<{ prompt: () => void } | null>(null);
+  let isIos = $state(false);
+  let standalone = $state(false);
+  let showIosHint = $state(false);
+
   function cwdName(cwd: string): string {
     return cwd.split("/").filter(Boolean).pop() ?? cwd;
+  }
+
+  async function startScan() {
+    scanError = "";
+    scanning = true;
+    await tick(); // <video> 렌더 대기
+    try {
+      const reader = new BrowserQRCodeReader();
+      scanControls = await reader.decodeFromVideoDevice(undefined, videoEl, (result) => {
+        if (result && savePairingFromUrl(result.getText())) {
+          stopScan();
+          location.reload(); // 저장된 페어링으로 재초기화
+        }
+        // 프레임마다 나는 NotFound 에러는 정상 → 무시
+      });
+    } catch (e) {
+      scanError = "카메라를 열 수 없어요: " + (e as Error).message;
+      scanning = false;
+    }
+  }
+
+  function stopScan() {
+    scanControls?.stop();
+    scanControls = null;
+    scanning = false;
+  }
+
+  function installApp() {
+    if (installPrompt) {
+      installPrompt.prompt();
+      installPrompt = null;
+    } else if (isIos) {
+      showIosHint = true;
+    }
   }
 
   /** 현재 페어링을 QR로 — 폰 카메라로 찍으면 폰에서 decku가 열림. */
@@ -32,6 +79,16 @@
   }
 
   onMount(async () => {
+    // PWA 설치 가능 감지
+    isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
+    standalone =
+      window.matchMedia("(display-mode: standalone)").matches ||
+      (navigator as { standalone?: boolean }).standalone === true;
+    window.addEventListener("beforeinstallprompt", (e: Event) => {
+      e.preventDefault();
+      installPrompt = e as unknown as { prompt: () => void };
+    });
+
     const p = loadPairing();
     if (!p) {
       status = "페어링 필요";
@@ -57,6 +114,7 @@
 
   onDestroy(() => {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
+    stopScan();
     void client?.stop();
   });
 
@@ -98,8 +156,12 @@
   {:else}
     <span class="status">{status}</span>
   {/if}
+  <span class="spacer"></span>
+  {#if !standalone && (installPrompt || isIos)}
+    <button onclick={installApp}>📲 앱 설치</button>
+  {/if}
   {#if pairing}
-    <button class="phone-btn" onclick={showPhoneQr}>📱 폰에서 열기</button>
+    <button onclick={showPhoneQr}>📱 폰에서 열기</button>
     <button onclick={unpair}>연결 해제</button>
   {/if}
 </header>
@@ -122,10 +184,30 @@
   </div>
 {/if}
 
+{#if showIosHint}
+  <div class="qr-overlay" role="button" tabindex="0" onclick={() => (showIosHint = false)} onkeydown={() => {}}>
+    <div class="qr-card" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+      <h3>홈 화면에 추가</h3>
+      <p class="muted">Safari 하단 <strong>공유</strong> 버튼 → <strong>홈 화면에 추가</strong>를 누르세요.</p>
+      <button onclick={() => (showIosHint = false)}>닫기</button>
+    </div>
+  </div>
+{/if}
+
 {#if !pairing}
   <main class="empty">
     <h2>페어링이 필요합니다</h2>
-    <p>Mac에서 <code>decku pair</code> 실행 후, 표시되는 QR을 스캔하거나 URL을 여세요.</p>
+    <p>Mac에서 <code>decku pair</code> (또는 <code>decku run</code>) 실행 → 표시되는 QR을 아래 카메라로 찍거나, 폰 기본 카메라로 찍어 여세요.</p>
+
+    {#if scanning}
+      <!-- svelte-ignore a11y_media_has_caption -->
+      <video bind:this={videoEl} autoplay playsinline muted class="scanner"></video>
+      <p class="muted">decku QR을 카메라에 비추세요…</p>
+      <button onclick={stopScan}>취소</button>
+    {:else}
+      <button class="primary" onclick={startScan}>📷 카메라로 페어링</button>
+    {/if}
+    {#if scanError}<p class="err">{scanError}</p>{/if}
   </main>
 {:else}
   <div class="layout">
@@ -190,7 +272,10 @@
   .dot.on { background: #1a9d3b; }
   .offline-hint { color: #b00; font-size: 0.8rem; padding: 0.4rem 0.5rem; background: #fff4f4; border-radius: 6px; }
   header button { font-size: 0.8rem; }
-  .phone-btn { margin-left: auto; }
+  .spacer { margin-left: auto; }
+  .scanner { width: 100%; max-width: 360px; border-radius: 10px; background: #000; margin: 0.5rem 0; }
+  .primary { padding: 0.6rem 1.2rem; border-radius: 8px; border: 1px solid #1a73e8; background: #1a73e8; color: #fff; font-size: 0.95rem; cursor: pointer; }
+  .err { color: #b00; }
   .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.45); display: flex; align-items: center; justify-content: center; z-index: 50; }
   .qr-card { background: #fff; border-radius: 12px; padding: 1.5rem; text-align: center; max-width: 90vw; }
   .qr-card h3 { margin: 0 0 0.3rem; }
