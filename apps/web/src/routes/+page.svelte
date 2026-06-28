@@ -25,7 +25,11 @@
   let client: DeckuClient | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
-  let origin = $state("https://decku.vercel.app"); // 설치 안내 URL (SSR 폴백)
+  let origin = $state("https://decku.app"); // 설치 안내 URL (SSR 폴백)
+  // decku.app(기본 도메인)이면 --url 생략, 아니면 명시
+  let pairCmd = $derived(
+    origin === "https://decku.app" ? "npx @decku/cli pair" : `npx @decku/cli pair --url ${origin}`,
+  );
 
   // 카메라 스캐너 (페어링)
   let scanning = $state(false);
@@ -373,42 +377,54 @@
   <main class="landing">
     <section class="hero">
       <div class="hero-logo">d</div>
-      <h1>어디서든 내 Claude 세션을 본다</h1>
+      <h1>내 Claude 세션을<br />어디서든 손안에</h1>
       <p class="lead">
-        Mac에서 돌아가는 Claude 세션을 폰·웹 브라우저에서 실시간으로 <strong>보고, 이어서 대화</strong>하세요.
-        QR 한 번으로 페어링, 로그인 없음, <strong>종단간 암호화(E2EE)</strong>.
+        Mac에서 돌아가는 Claude 세션을 폰·브라우저에서 실시간으로 보고, 그 자리에서 이어 대화하세요.
       </p>
+      <div class="badges">
+        <span class="badge">⚡ 로그인 없음</span>
+        <span class="badge">🔒 종단간 암호화</span>
+        <span class="badge">💸 무료·오픈소스</span>
+      </div>
     </section>
 
     <section class="features">
-      <div class="feat"><span class="fi">📺</span><div><b>실시간 미러링</b><span>떠 있는 세션을 그대로 — 새 세션만이 아니라.</span></div></div>
-      <div class="feat"><span class="fi">💬</span><div><b>이어서 대화</b><span>폰에서 메시지·이미지를 보내면 그 세션에 주입됩니다.</span></div></div>
-      <div class="feat"><span class="fi">🔒</span><div><b>E2EE</b><span>키는 QR에만. 서버엔 암호문만 지나갑니다.</span></div></div>
+      <div class="feat"><span class="fi">📺</span><div><b>떠 있는 세션 그대로</b><span>새로 만든 게 아니라, 지금 Mac에서 작업 중인 세션을 그대로 미러링.</span></div></div>
+      <div class="feat"><span class="fi">💬</span><div><b>이어서 대화</b><span>폰에서 보낸 메시지·이미지가 그 세션에 그대로 주입됩니다.</span></div></div>
+      <div class="feat"><span class="fi">🔒</span><div><b>나만 읽는다</b><span>암호화 키는 QR 안에만. 서버를 지나는 건 암호문뿐입니다.</span></div></div>
     </section>
 
-    <section class="install">
-      <h2>1. Mac에서 브릿지 실행</h2>
-      <p class="muted">Node가 있으면 설치 없이 바로:</p>
-      <pre class="cmd"><code>npx @decku/cli pair --url {origin}</code></pre>
-      <p class="muted small">자주 쓴다면 <code>npm i -g @decku/cli</code> 후 <code>decku run</code>.</p>
+    <section class="steps">
+      <div class="step">
+        <span class="num">1</span>
+        <div class="step-body">
+          <h2>Mac에서 브릿지 실행</h2>
+          <p class="muted">Node만 있으면 설치 없이 바로:</p>
+          <pre class="cmd"><code>{pairCmd}</code></pre>
+          <p class="muted small">자주 쓴다면 <code>npm i -g @decku/cli</code> 후 <code>decku run</code>.</p>
+        </div>
+      </div>
+
+      <div class="step">
+        <span class="num">2</span>
+        <div class="step-body">
+          <h2>QR로 페어링</h2>
+          <p class="muted">터미널에 뜬 QR을 폰 기본 카메라로 찍거나, 이 기기 카메라로 스캔하세요.</p>
+
+          {#if scanning}
+            <!-- svelte-ignore a11y_media_has_caption -->
+            <video bind:this={videoEl} autoplay playsinline muted class="scanner"></video>
+            <p class="muted">decku QR을 카메라에 비추세요…</p>
+            <button onclick={stopScan}>취소</button>
+          {:else}
+            <button class="primary" onclick={startScan}>📷 카메라로 페어링</button>
+          {/if}
+          {#if scanError}<p class="err">{scanError}</p>{/if}
+        </div>
+      </div>
     </section>
 
-    <section class="pair">
-      <h2>2. QR 페어링</h2>
-      <p class="muted">표시되는 QR을 폰 기본 카메라로 찍거나, 이 기기 카메라로 찍으세요.</p>
-
-      {#if scanning}
-        <!-- svelte-ignore a11y_media_has_caption -->
-        <video bind:this={videoEl} autoplay playsinline muted class="scanner"></video>
-        <p class="muted">decku QR을 카메라에 비추세요…</p>
-        <button onclick={stopScan}>취소</button>
-      {:else}
-        <button class="primary" onclick={startScan}>📷 카메라로 페어링</button>
-      {/if}
-      {#if scanError}<p class="err">{scanError}</p>{/if}
-    </section>
-
-    <footer class="lfoot">오픈소스 · 무료 · <a href="https://github.com/cinestria/decku" target="_blank" rel="noreferrer">github.com/cinestria/decku</a></footer>
+    <footer class="lfoot"><a href="https://github.com/cinestria/decku" target="_blank" rel="noreferrer">GitHub</a> · 무료 · 오픈소스</footer>
   </main>
 {:else}
   <div class="layout" class:has-sel={selected}>
@@ -570,27 +586,31 @@
   .primary { padding: 0.7rem 1.4rem; border-radius: 10px; border: 0; background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
   .primary:hover { filter: brightness(1.05); }
 
-  .landing { max-width: 34rem; margin: 0 auto; padding: 2.5rem 1.5rem 3rem; font-family: system-ui, sans-serif; }
+  .landing { max-width: 33rem; margin: 0 auto; padding: 3rem 1.5rem 3rem; font-family: system-ui, sans-serif; }
   .hero { text-align: center; }
-  .hero-logo { width: 54px; height: 54px; margin: 0 auto 1rem; border-radius: 15px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 1.8rem; box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 40%, transparent); }
-  .hero h1 { font-size: 1.7rem; line-height: 1.25; letter-spacing: -0.02em; margin: 0 0 0.75rem; }
-  .lead { color: var(--muted); line-height: 1.65; margin: 0 auto; max-width: 28rem; }
-  .lead strong { color: var(--text); font-weight: 600; }
+  .hero-logo { width: 58px; height: 58px; margin: 0 auto 1.1rem; border-radius: 16px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 2rem; box-shadow: 0 10px 30px color-mix(in srgb, var(--accent) 45%, transparent); }
+  .hero h1 { font-size: 1.85rem; line-height: 1.2; letter-spacing: -0.025em; margin: 0 0 0.85rem; }
+  .lead { color: var(--muted); line-height: 1.65; margin: 0 auto 1.2rem; max-width: 26rem; font-size: 1.02rem; }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.4rem; justify-content: center; }
+  .badge { font-size: 0.76rem; color: var(--text); background: var(--surface); border: 1px solid var(--border); padding: 0.3rem 0.65rem; border-radius: 999px; }
 
-  .features { display: grid; gap: 0.4rem; margin: 2rem 0 0.5rem; }
-  .feat { display: flex; gap: 0.8rem; align-items: flex-start; padding: 0.8rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
-  .feat .fi { font-size: 1.3rem; line-height: 1.4; }
-  .feat b { display: block; font-size: 0.92rem; }
-  .feat span:last-child { display: block; color: var(--muted); font-size: 0.82rem; line-height: 1.45; margin-top: 0.1rem; }
+  .features { display: grid; gap: 0.5rem; margin: 2.5rem 0; }
+  .feat { display: flex; gap: 0.85rem; align-items: flex-start; padding: 0.9rem 1rem; background: var(--surface); border: 1px solid var(--border); border-radius: 13px; }
+  .feat .fi { font-size: 1.35rem; line-height: 1.35; flex: none; }
+  .feat b { display: block; font-size: 0.94rem; }
+  .feat span:last-child { display: block; color: var(--muted); font-size: 0.83rem; line-height: 1.5; margin-top: 0.15rem; }
 
-  .install, .pair { margin-top: 2rem; }
-  .install h2, .pair h2 { font-size: 1.05rem; margin: 0 0 0.5rem; }
-  .pair { text-align: center; padding-top: 0.5rem; }
-  .cmd { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; overflow-x: auto; margin: 0.5rem 0; }
+  .steps { display: grid; gap: 1.4rem; margin-top: 2.5rem; }
+  .step { display: flex; gap: 0.85rem; align-items: flex-start; }
+  .step .num { flex: none; width: 26px; height: 26px; border-radius: 50%; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 0.85rem; margin-top: 0.1rem; }
+  .step-body { flex: 1; min-width: 0; }
+  .step-body h2 { font-size: 1.08rem; margin: 0 0 0.35rem; }
+  .step-body > p { margin: 0.2rem 0; }
+  .cmd { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1rem; overflow-x: auto; margin: 0.55rem 0; }
   .cmd code { background: none; padding: 0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.85rem; color: var(--text); white-space: nowrap; }
   .small { font-size: 0.8rem; }
 
-  .lfoot { margin-top: 2.5rem; text-align: center; color: var(--muted); font-size: 0.8rem; }
+  .lfoot { margin-top: 3rem; text-align: center; color: var(--muted); font-size: 0.8rem; }
   .lfoot a { color: var(--accent); text-decoration: none; }
   .lfoot a:hover { text-decoration: underline; }
 

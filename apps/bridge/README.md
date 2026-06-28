@@ -5,8 +5,8 @@
 ## 사용
 
 ```bash
-# 1) 페어링 (웹앱 URL로) → QR/URL 출력
-npx @decku/cli pair --url https://<your-decku>.vercel.app
+# 1) 페어링 → QR/URL 출력 (기본 https://decku.app)
+npx @decku/cli pair
 
 # 2) 실행 (세션 watch + realtime)
 npx @decku/cli run

@@ -60,7 +60,7 @@ pnpm db:migrate                          # namespaces 테이블
 ### 웹 → Vercel
 1. Vercel에 repo 연결, **Root Directory = `apps/web`** (pnpm workspace 자동 감지).
 2. 환경변수 3개(`SUPABASE_JWT_SECRET`, `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`) 등록.
-3. 배포 후 프로덕션 URL로 페어링: `decku pair --url https://<your>.vercel.app`.
+3. 커스텀 도메인(`decku.app`) 연결 후 페어링: `decku pair` (기본 URL = `https://decku.app`).
 
 ### 브릿지 → npm / npx
 ```bash

@@ -26,7 +26,7 @@ export async function pair(argv: string[]): Promise<void> {
     cfg = existing;
     console.log(`기존 페어링 재사용 (namespace ${cfg.namespace.slice(0, 8)}…). 새로 만들려면 --new.`);
   } else {
-    const apiUrl = (flag(argv, "--url") ?? process.env.DECKU_URL ?? "https://decku.vercel.app").replace(/\/$/, "");
+    const apiUrl = (flag(argv, "--url") ?? process.env.DECKU_URL ?? "https://decku.app").replace(/\/$/, "");
     console.log(`페어링 중… (${apiUrl})`);
     const res = await apiPair(apiUrl);
     cfg = {

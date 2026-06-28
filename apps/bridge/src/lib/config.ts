@@ -7,7 +7,7 @@ import { join } from "node:path";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 
 export interface BridgeConfig {
-  apiUrl: string; // 웹앱 base URL (예: https://decku.vercel.app)
+  apiUrl: string; // 웹앱 base URL (예: https://decku.app)
   namespace: string; // 자격증명 (랜덤)
   e2eeKey: string; // base64url (32B)
   supabaseUrl: string;
