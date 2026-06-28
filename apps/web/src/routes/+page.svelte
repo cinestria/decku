@@ -129,8 +129,8 @@
     void client?.stop();
   });
 
-  async function open(sid: string) {
-    if (!client || selected === sid) return;
+  async function loadSession(sid: string) {
+    if (!client) return;
     selected = sid;
     events = [];
     loading = true;
@@ -138,6 +138,75 @@
       events = [...events, ...tx.events];
       if (tx.done) loading = false;
     });
+  }
+
+  function open(sid: string) {
+    if (selected === sid) return;
+    void loadSession(sid);
+  }
+
+  // 당겨서 새로고침 (모바일)
+  let pullY = $state(0);
+  let refreshing = $state(false);
+  const PULL_MAX = 90;
+  const PULL_TRIGGER = 60;
+
+  async function refresh() {
+    if (refreshing || !client) return;
+    refreshing = true;
+    pullY = 0;
+    try {
+      if (selected) {
+        await loadSession(selected);
+        const t0 = Date.now();
+        while (loading && Date.now() - t0 < 5000) await new Promise((r) => setTimeout(r, 100));
+      } else if (view === "history") {
+        await client.requestHistory(40);
+        await new Promise((r) => setTimeout(r, 600));
+      } else {
+        await new Promise((r) => setTimeout(r, 400)); // live는 heartbeat가 갱신
+      }
+    } finally {
+      refreshing = false;
+    }
+  }
+
+  function ptr(node: HTMLElement) {
+    let startY = 0;
+    let active = false;
+    const onStart = (e: TouchEvent) => {
+      if (node.scrollTop <= 0 && !refreshing) {
+        startY = e.touches[0]!.clientY;
+        active = true;
+      }
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!active) return;
+      const dy = e.touches[0]!.clientY - startY;
+      if (dy > 0) {
+        e.preventDefault();
+        pullY = Math.min(PULL_MAX, dy * 0.5);
+      } else {
+        active = false;
+        pullY = 0;
+      }
+    };
+    const onEnd = () => {
+      if (!active) return;
+      active = false;
+      if (pullY >= PULL_TRIGGER) void refresh();
+      else pullY = 0;
+    };
+    node.addEventListener("touchstart", onStart, { passive: true });
+    node.addEventListener("touchmove", onMove, { passive: false });
+    node.addEventListener("touchend", onEnd);
+    return {
+      destroy() {
+        node.removeEventListener("touchstart", onStart);
+        node.removeEventListener("touchmove", onMove);
+        node.removeEventListener("touchend", onEnd);
+      },
+    };
   }
 
   function openHistory() {
@@ -285,7 +354,10 @@
         <p class="muted center">세션을 선택하세요.</p>
       {:else}
         <button class="back" onclick={() => (selected = null)}>‹ 목록</button>
-        <div class="scroll">
+        <div class="ptr" class:settle={!refreshing && pullY === 0} style="height:{refreshing ? 42 : pullY}px">
+          <span class="spinner" class:spin={refreshing} style="transform:rotate({pullY * 4}deg);opacity:{refreshing || pullY > 4 ? 1 : 0}"></span>
+        </div>
+        <div class="scroll" use:ptr>
           {#if loading}<p class="muted">불러오는 중…</p>{/if}
           {#each events as ev, i (i)}
             {#if ev.kind === "title"}
@@ -404,7 +476,12 @@
   .offline-hint { color: var(--danger); font-size: 0.78rem; padding: 0.5rem 0.6rem; background: color-mix(in srgb, var(--danger) 10%, transparent); border-radius: 8px; }
 
   .convo { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
-  .convo .scroll { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; }
+  .convo .scroll { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; overscroll-behavior-y: contain; }
+  .ptr { display: flex; align-items: center; justify-content: center; overflow: hidden; flex: none; }
+  .ptr.settle { transition: height 0.2s ease; }
+  .spinner { width: 22px; height: 22px; border: 2.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; transition: opacity 0.15s; }
+  .spinner.spin { animation: spin 0.7s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
   .center { text-align: center; margin-top: 4rem; }
   .title { text-align: center; font-weight: 700; color: var(--muted); font-size: 0.85rem; margin: 0.5rem 0 1.25rem; }
   .title::before { content: "⭐ "; }
