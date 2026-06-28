@@ -25,6 +25,7 @@
   let client: DeckuClient | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
+  let origin = $state("https://decku.vercel.app"); // 설치 안내 URL (SSR 폴백)
 
   // 카메라 스캐너 (페어링)
   let scanning = $state(false);
@@ -84,6 +85,7 @@
   }
 
   onMount(async () => {
+    origin = location.origin;
     // PWA 설치 가능 감지
     isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     standalone =
@@ -368,19 +370,45 @@
 {/if}
 
 {#if !pairing}
-  <main class="empty">
-    <h2>페어링이 필요합니다</h2>
-    <p>Mac에서 <code>decku pair</code> (또는 <code>decku run</code>) 실행 → 표시되는 QR을 아래 카메라로 찍거나, 폰 기본 카메라로 찍어 여세요.</p>
+  <main class="landing">
+    <section class="hero">
+      <div class="hero-logo">d</div>
+      <h1>어디서든 내 Claude 세션을 본다</h1>
+      <p class="lead">
+        Mac에서 돌아가는 Claude 세션을 폰·웹 브라우저에서 실시간으로 <strong>보고, 이어서 대화</strong>하세요.
+        QR 한 번으로 페어링, 로그인 없음, <strong>종단간 암호화(E2EE)</strong>.
+      </p>
+    </section>
 
-    {#if scanning}
-      <!-- svelte-ignore a11y_media_has_caption -->
-      <video bind:this={videoEl} autoplay playsinline muted class="scanner"></video>
-      <p class="muted">decku QR을 카메라에 비추세요…</p>
-      <button onclick={stopScan}>취소</button>
-    {:else}
-      <button class="primary" onclick={startScan}>📷 카메라로 페어링</button>
-    {/if}
-    {#if scanError}<p class="err">{scanError}</p>{/if}
+    <section class="features">
+      <div class="feat"><span class="fi">📺</span><div><b>실시간 미러링</b><span>떠 있는 세션을 그대로 — 새 세션만이 아니라.</span></div></div>
+      <div class="feat"><span class="fi">💬</span><div><b>이어서 대화</b><span>폰에서 메시지·이미지를 보내면 그 세션에 주입됩니다.</span></div></div>
+      <div class="feat"><span class="fi">🔒</span><div><b>E2EE</b><span>키는 QR에만. 서버엔 암호문만 지나갑니다.</span></div></div>
+    </section>
+
+    <section class="install">
+      <h2>1. Mac에서 브릿지 실행</h2>
+      <p class="muted">Node가 있으면 설치 없이 바로:</p>
+      <pre class="cmd"><code>npx @decku/cli pair --url {origin}</code></pre>
+      <p class="muted small">자주 쓴다면 <code>npm i -g @decku/cli</code> 후 <code>decku run</code>.</p>
+    </section>
+
+    <section class="pair">
+      <h2>2. QR 페어링</h2>
+      <p class="muted">표시되는 QR을 폰 기본 카메라로 찍거나, 이 기기 카메라로 찍으세요.</p>
+
+      {#if scanning}
+        <!-- svelte-ignore a11y_media_has_caption -->
+        <video bind:this={videoEl} autoplay playsinline muted class="scanner"></video>
+        <p class="muted">decku QR을 카메라에 비추세요…</p>
+        <button onclick={stopScan}>취소</button>
+      {:else}
+        <button class="primary" onclick={startScan}>📷 카메라로 페어링</button>
+      {/if}
+      {#if scanError}<p class="err">{scanError}</p>{/if}
+    </section>
+
+    <footer class="lfoot">오픈소스 · 무료 · <a href="https://github.com/cinestria/decku" target="_blank" rel="noreferrer">github.com/cinestria/decku</a></footer>
   </main>
 {:else}
   <div class="layout" class:has-sel={selected}>
@@ -542,9 +570,30 @@
   .primary { padding: 0.7rem 1.4rem; border-radius: 10px; border: 0; background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
   .primary:hover { filter: brightness(1.05); }
 
-  .empty { max-width: 30rem; margin: 5rem auto; padding: 0 1.5rem; text-align: center; font-family: system-ui, sans-serif; }
-  .empty h2 { font-size: 1.4rem; }
-  .empty p { color: var(--muted); line-height: 1.6; }
+  .landing { max-width: 34rem; margin: 0 auto; padding: 2.5rem 1.5rem 3rem; font-family: system-ui, sans-serif; }
+  .hero { text-align: center; }
+  .hero-logo { width: 54px; height: 54px; margin: 0 auto 1rem; border-radius: 15px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; font-size: 1.8rem; box-shadow: 0 8px 24px color-mix(in srgb, var(--accent) 40%, transparent); }
+  .hero h1 { font-size: 1.7rem; line-height: 1.25; letter-spacing: -0.02em; margin: 0 0 0.75rem; }
+  .lead { color: var(--muted); line-height: 1.65; margin: 0 auto; max-width: 28rem; }
+  .lead strong { color: var(--text); font-weight: 600; }
+
+  .features { display: grid; gap: 0.4rem; margin: 2rem 0 0.5rem; }
+  .feat { display: flex; gap: 0.8rem; align-items: flex-start; padding: 0.8rem 0.9rem; background: var(--surface); border: 1px solid var(--border); border-radius: 12px; }
+  .feat .fi { font-size: 1.3rem; line-height: 1.4; }
+  .feat b { display: block; font-size: 0.92rem; }
+  .feat span:last-child { display: block; color: var(--muted); font-size: 0.82rem; line-height: 1.45; margin-top: 0.1rem; }
+
+  .install, .pair { margin-top: 2rem; }
+  .install h2, .pair h2 { font-size: 1.05rem; margin: 0 0 0.5rem; }
+  .pair { text-align: center; padding-top: 0.5rem; }
+  .cmd { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 0.85rem 1rem; overflow-x: auto; margin: 0.5rem 0; }
+  .cmd code { background: none; padding: 0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.85rem; color: var(--text); white-space: nowrap; }
+  .small { font-size: 0.8rem; }
+
+  .lfoot { margin-top: 2.5rem; text-align: center; color: var(--muted); font-size: 0.8rem; }
+  .lfoot a { color: var(--accent); text-decoration: none; }
+  .lfoot a:hover { text-decoration: underline; }
+
   .scanner { width: 100%; max-width: 320px; border-radius: 14px; background: #000; margin: 1rem auto; }
   .err { color: var(--danger); }
 
