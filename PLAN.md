@@ -145,10 +145,10 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 - ✅ 유닛테스트 8개: 왕복·ciphertext 노출 없음·다른 키 거부·GCM 위변조 거부·iv 매번 다름·키 길이 검증.
 - 다음(M3): 페어링 QR에 e2eeKey 동봉 + publish 전 encrypt / 수신 후 decrypt 배선.
 
-### M3 — realtime 읽기 왕복 (QR 페어링, 암호화) (1.5d)
-- 브릿지: `pair`로 QR 표시 → realtime JWT → `sessions`/`tx` 채널에 **암호화 페이로드** publish.
-- 프론트: QR 스캔 → 세션 목록 + 세션 클릭 → on-demand backfill(cmd "load") → **복호** 후 대화 렌더 + 실시간 append.
-- ✅ 두 namespace 격리(E2E) + Supabase 측엔 ciphertext만 보임.
+### M3 — realtime 읽기 왕복 (QR 페어링, 암호화) ✅ 완료
+- 브릿지: `pair`(=/api/pair → namespace+token, e2eeKey 생성, QR/URL) + `run` realtime(세션목록 heartbeat publish, cmd load 백필 청크, live append) — 전부 E2EE 봉투.
+- 프론트: pairing(URL hash→localStorage) + `DeckuClient`(구독/복호/cmd) + 세션목록·대화 UI(Svelte 5).
+- ✅ **E2E 실측 PASS**: 브릿지→Supabase(ciphertext)→구독자 복호 왕복. 백필 789 events(done), 세션목록 5개, Supabase엔 ciphertext만.
 
 ### M4 — 채팅 전송 (1d)
 - 프론트 입력 → `cmd` publish. 브릿지 cmd subscribe → Agent SDK resume 주입 → append가 tx로 돌아와 화면 갱신.
