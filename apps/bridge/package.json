@@ -1,5 +1,5 @@
 {
-  "name": "decku",
+  "name": "@decku/cli",
   "version": "0.1.0",
   "description": "decku 브릿지 — Claude Desktop 세션을 웹앱에 연결 (로컬, E2EE)",
   "license": "MIT",

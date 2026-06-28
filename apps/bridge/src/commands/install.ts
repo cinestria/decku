@@ -2,7 +2,7 @@
  * `decku install` / `uninstall` — 부팅 시 자동 시작.
  *
  * macOS는 launchd(LaunchAgent)로 등록. (Linux=systemd user, Windows=Task Scheduler는 README 안내.)
- * 전제: 전역 설치(`npm i -g decku`) 후 사용 — plist가 설치된 cli 경로를 가리키므로.
+ * 전제: 전역 설치(`npm i -g @decku/cli`) 후 사용 — plist가 설치된 cli 경로를 가리키므로.
  *       (npx 임시 경로로는 영속 등록이 불안정.) 페어링(`pair`)도 먼저 해둘 것.
  */
 import { homedir, platform } from "node:os";

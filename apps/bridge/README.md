@@ -6,16 +6,16 @@
 
 ```bash
 # 1) 페어링 (웹앱 URL로) → QR/URL 출력
-npx decku pair --url https://<your-decku>.vercel.app
+npx @decku/cli pair --url https://<your-decku>.vercel.app
 
 # 2) 실행 (세션 watch + realtime)
-npx decku run
+npx @decku/cli run
 ```
 출력된 QR/URL을 브라우저에서 열면 세션 목록·대화가 뜬다.
 
 ### 자동 시작 (macOS)
 ```bash
-npm i -g decku
+npm i -g @decku/cli
 decku pair --url <webUrl>
 decku install      # launchd 등록 (로그인 시 자동 실행)
 decku uninstall    # 해제

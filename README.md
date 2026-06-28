@@ -31,8 +31,8 @@ pnpm install
 pnpm --filter @decku/web dev          # 포트 확인(5173/5174)
 
 # 2) 브릿지: 페어링 후 실행
-pnpm --filter decku exec tsx src/cli.ts pair --url http://localhost:5173
-pnpm --filter decku exec tsx src/cli.ts run
+pnpm --filter @decku/cli exec tsx src/cli.ts pair --url http://localhost:5173
+pnpm --filter @decku/cli exec tsx src/cli.ts run
 ```
 `pair`가 출력한 QR/URL을 브라우저에서 열면 세션 목록·대화가 뜨고, 입력창으로 채팅을 보낼 수 있다.
 
@@ -64,10 +64,10 @@ pnpm db:migrate                          # namespaces 테이블
 
 ### 브릿지 → npm / npx
 ```bash
-pnpm --filter decku build        # tsup 번들 → dist/cli.js
+pnpm --filter @decku/cli build        # tsup 번들 → dist/cli.js
 cd apps/bridge && npm publish            # (npm 로그인 후)
 ```
-사용자: `npx decku pair --url <webUrl>` → `npx decku run`.
+사용자: `npx @decku/cli pair --url <webUrl>` → `npx @decku/cli run`.
 부팅 자동시작(macOS): 전역 설치 후 `decku install`(launchd). Windows=작업 스케줄러, Linux=systemd user에 `decku run` 등록.
 
 ## 보안 체크리스트
