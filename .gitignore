@@ -1,0 +1,14 @@
+node_modules/
+dist/
+.svelte-kit/
+.vercel/
+build/
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+.DS_Store
+coverage/
+
+# bridge local config (device token, master secret) — NEVER commit
+.decku/

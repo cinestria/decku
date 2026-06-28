@@ -1,0 +1,9 @@
+{"type":"ai-title","aiTitle":"테스트 세션 제목","sessionId":"sess-1"}
+{"parentUuid":null,"type":"user","message":{"role":"user","content":"안녕 클로드"},"uuid":"u1","timestamp":"2026-06-28T10:00:00.000Z","sessionId":"sess-1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"thinking","thinking":"속으로 생각"},{"type":"text","text":"안녕하세요!"}]},"uuid":"a1","timestamp":"2026-06-28T10:00:01.000Z","sessionId":"sess-1"}
+{"type":"assistant","message":{"role":"assistant","content":[{"type":"text","text":"파일을 읽을게요"},{"type":"tool_use","name":"Read","id":"tool-1"}]},"uuid":"a2","timestamp":"2026-06-28T10:00:02.000Z"}
+{"type":"user","message":{"role":"user","content":[{"type":"tool_result","tool_use_id":"tool-1","content":[{"type":"text","text":"파일 내용"}]}]},"uuid":"u2"}
+{"type":"attachment","attachment":{"type":"deferred_tools_delta","addedNames":["X"]},"uuid":"x1"}
+{"type":"queue-operation","operation":"enqueue","sessionId":"sess-1","content":"무시되는 로그"}
+{"type":"system","content":"시스템 줄"}
+{"type":"last-prompt","prompt":"무시"}

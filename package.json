@@ -1,0 +1,20 @@
+{
+  "name": "decku",
+  "private": true,
+  "version": "0.0.0",
+  "description": "웹앱에서 Claude Desktop 세션을 보고 조종하는 멀티테넌트 원격 제어 (E2EE)",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @decku/db generate",
+    "db:migrate": "pnpm --filter @decku/db migrate",
+    "db:push": "pnpm --filter @decku/db push",
+    "db:studio": "pnpm --filter @decku/db studio"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "packageManager": "pnpm@11.9.0"
+}
