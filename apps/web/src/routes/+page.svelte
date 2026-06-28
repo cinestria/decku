@@ -134,10 +134,74 @@
     selected = sid;
     events = [];
     loading = true;
+    stick = true; // 열면 최신(바닥)으로
     await client.openSession(sid, (tx: TxPayload) => {
       events = [...events, ...tx.events];
       if (tx.done) loading = false;
     });
+  }
+
+  // ── 스크롤: 열 때 바닥, 드래그 가능한 커스텀 스크롤바 ──
+  let scrollEl = $state<HTMLElement>();
+  let thumbTop = $state(0);
+  let thumbH = $state(0);
+  let scrollPct = $state(0);
+  let overflow = $state(false);
+  let stick = true; // 바닥에 붙어있나
+  const TRACK_INSET = 12;
+
+  function updateThumb() {
+    const el = scrollEl;
+    if (!el) return;
+    const { scrollTop, scrollHeight, clientHeight } = el;
+    overflow = scrollHeight > clientHeight + 4;
+    stick = scrollHeight - scrollTop - clientHeight < 120;
+    if (!overflow) return;
+    const trackH = clientHeight - TRACK_INSET;
+    thumbH = Math.max(30, (clientHeight / scrollHeight) * trackH);
+    const room = trackH - thumbH;
+    const max = scrollHeight - clientHeight;
+    thumbTop = max > 0 ? (scrollTop / max) * room : 0;
+    scrollPct = max > 0 ? Math.round((scrollTop / max) * 100) : 0;
+  }
+
+  $effect(() => {
+    void events.length; // 의존성
+    if (!scrollEl) return;
+    void tick().then(() => {
+      if (!scrollEl) return;
+      if (stick) scrollEl.scrollTop = scrollEl.scrollHeight;
+      updateThumb();
+    });
+  });
+
+  let dragging = false;
+  let dragStartY = 0;
+  let dragStartTop = 0;
+  const clamp = (v: number, a: number, b: number) => Math.max(a, Math.min(b, v));
+
+  function onThumbDown(e: PointerEvent) {
+    e.stopPropagation();
+    e.preventDefault();
+    dragging = true;
+    dragStartY = e.clientY;
+    dragStartTop = thumbTop;
+    (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
+  }
+  function onThumbMove(e: PointerEvent) {
+    if (!dragging || !scrollEl) return;
+    const el = scrollEl;
+    const room = el.clientHeight - TRACK_INSET - thumbH;
+    const newTop = clamp(dragStartTop + (e.clientY - dragStartY), 0, room);
+    el.scrollTop = room > 0 ? (newTop / room) * (el.scrollHeight - el.clientHeight) : 0;
+  }
+  function onThumbUp(e: PointerEvent) {
+    dragging = false;
+    try {
+      (e.currentTarget as HTMLElement).releasePointerCapture(e.pointerId);
+    } catch {
+      /* noop */
+    }
   }
 
   function open(sid: string) {
@@ -357,25 +421,47 @@
         <div class="ptr" class:settle={!refreshing && pullY === 0} style="height:{refreshing ? 42 : pullY}px">
           <span class="spinner" class:spin={refreshing} style="transform:rotate({pullY * 4}deg);opacity:{refreshing || pullY > 4 ? 1 : 0}"></span>
         </div>
-        <div class="scroll" use:ptr>
-          {#if loading}<p class="muted">불러오는 중…</p>{/if}
-          {#each events as ev, i (i)}
-            {#if ev.kind === "title"}
-              <div class="title">{ev.title}</div>
-            {:else}
-              <div class="msg {ev.role}">
-                <div class="bubble">
-                  {#each ev.blocks as b}
-                    {#if b.type === "text"}<p>{b.text}</p>
-                    {:else if b.type === "thinking"}<p class="thinking">{b.text}</p>
-                    {:else if b.type === "tool_use"}<p class="tool">⚙ {b.name}</p>
-                    {:else if b.type === "tool_result"}<p class="tool">↳ {b.text.slice(0, 300)}</p>
-                    {:else if b.type === "image"}<p class="tool">🖼 이미지</p>{/if}
-                  {/each}
+        <div class="scroll-wrap">
+          <div id="convo-scroll" class="scroll" use:ptr bind:this={scrollEl} onscroll={updateThumb}>
+            {#if loading}<p class="muted">불러오는 중…</p>{/if}
+            {#each events as ev, i (i)}
+              {#if ev.kind === "title"}
+                <div class="title">{ev.title}</div>
+              {:else}
+                <div class="msg {ev.role}">
+                  <div class="bubble">
+                    {#each ev.blocks as b}
+                      {#if b.type === "text"}<p>{b.text}</p>
+                      {:else if b.type === "thinking"}<p class="thinking">{b.text}</p>
+                      {:else if b.type === "tool_use"}<p class="tool">⚙ {b.name}</p>
+                      {:else if b.type === "tool_result"}<p class="tool">↳ {b.text.slice(0, 300)}</p>
+                      {:else if b.type === "image"}<p class="tool">🖼 이미지</p>{/if}
+                    {/each}
+                  </div>
                 </div>
-              </div>
-            {/if}
-          {/each}
+              {/if}
+            {/each}
+          </div>
+          {#if overflow}
+            <div class="scrollbar">
+              <!-- svelte-ignore a11y_no_static_element_interactions -->
+              <div
+                class="sb-thumb"
+                role="scrollbar"
+                aria-controls="convo-scroll"
+                aria-orientation="vertical"
+                aria-valuenow={scrollPct}
+                aria-valuemin="0"
+                aria-valuemax="100"
+                tabindex="0"
+                style="height:{thumbH}px;transform:translateY({thumbTop}px)"
+                onpointerdown={onThumbDown}
+                onpointermove={onThumbMove}
+                onpointerup={onThumbUp}
+                onpointercancel={onThumbUp}
+              ></div>
+            </div>
+          {/if}
         </div>
         {#if pendingImages.length > 0}
           <div class="thumbs">
@@ -476,7 +562,12 @@
   .offline-hint { color: var(--danger); font-size: 0.78rem; padding: 0.5rem 0.6rem; background: color-mix(in srgb, var(--danger) 10%, transparent); border-radius: 8px; }
 
   .convo { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
-  .convo .scroll { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; overscroll-behavior-y: contain; }
+  .scroll-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
+  .scroll { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; overscroll-behavior-y: contain; scrollbar-width: none; }
+  .scroll::-webkit-scrollbar { display: none; }
+  .scrollbar { position: absolute; top: 6px; bottom: 6px; right: 2px; width: 14px; }
+  .sb-thumb { position: absolute; right: 3px; width: 7px; border-radius: 4px; background: var(--muted); opacity: 0.4; cursor: grab; touch-action: none; }
+  .sb-thumb:active { opacity: 0.7; cursor: grabbing; }
   .ptr { display: flex; align-items: center; justify-content: center; overflow: hidden; flex: none; }
   .ptr.settle { transition: height 0.2s ease; }
   .spinner { width: 22px; height: 22px; border: 2.5px solid var(--border); border-top-color: var(--accent); border-radius: 50%; transition: opacity 0.15s; }
