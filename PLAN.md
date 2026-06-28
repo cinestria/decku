@@ -156,10 +156,11 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 - ✅ resume 주입 실측: 같은 transcript에 append + **맥락 유지**(10→18줄, PONG 회상), 같은 sessionId.
 - 참고: `-p` 세션은 registry 미등록 → decku 목록엔 Desktop/interactive 세션만. 브라우저 실시간 데모는 실세션에서(주입은 사용자 선택).
 
-### M5 — Vercel 배포 + 마감 (1d)
-- 프론트 + API route Vercel 배포, env(secret) 설정. 브릿지 **`npm publish` + Homebrew formula + Scoop/winget 매니페스트**(전부 node 의존) + `install` 서브커맨드(autostart) + 셋업 문서.
-- 보안 체크리스트(아래) 전 항목 점검. backfill 청크 한도 부하 테스트.
-- ✅ 프로덕션 URL에서 QR 스캔→연결→대화→전송 전 흐름 동작.
+### M5 — 배포 준비 ✅ 완료 (최종 publish/deploy는 사용자 계정 단계)
+- 브릿지 **tsup 번들**(shared 인라인) → `dist/cli.js`(shebang), `npx @decku/bridge` 단독 동작 확인. bin/files/publishConfig 정리.
+- `install`/`uninstall`: macOS **launchd** autostart.
+- 루트/브릿지/웹 **README**(Vercel 배포·npx·Supabase 셋업) + 보안 체크리스트 점검.
+- ⏭ 사용자 단계: Vercel 배포(env 3개) + `npm publish`(npm 로그인). 그 후 프로덕션 URL로 페어링하면 전 흐름 동작.
 
 ### M6 — 보강 (후순위)
 - **Google/Apple 로그인 추가**(영속 계정·다기기·기기 폐기). Apple은 $99 결제 후. E2EE **서드파티 보안 감사**. 프라이버시 정책 게시.
