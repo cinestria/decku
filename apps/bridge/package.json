@@ -1,0 +1,24 @@
+{
+  "name": "@decku/bridge",
+  "version": "0.0.0",
+  "private": true,
+  "type": "module",
+  "bin": {
+    "decku-bridge": "./src/cli.ts"
+  },
+  "scripts": {
+    "dev": "tsx src/cli.ts",
+    "start": "tsx src/cli.ts",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@decku/shared": "workspace:*"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.4",
+    "vitest": "^2.0.5"
+  }
+}
