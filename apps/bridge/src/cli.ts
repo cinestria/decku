@@ -53,6 +53,7 @@ async function main(): Promise<void> {
 
   switch (cmd) {
     case "run":
+      console.log(`\x1b[1mdecku\x1b[0m \x1b[2mv${VERSION}\x1b[0m`);
       await run(rest);
       break;
     case "pair":
