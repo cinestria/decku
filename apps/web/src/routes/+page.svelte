@@ -122,7 +122,7 @@
     window.addEventListener("pageshow", onWake);
   });
 
-  let reconnecting = false;
+  let reconnecting = $state(false);
 
   async function startRealtime(p: Pairing): Promise<void> {
     client = new DeckuClient(p);
@@ -367,7 +367,9 @@
 
 <header>
   <a class="brand" href="/"><span class="logo">d</span>decku</a>
-  {#if connected}
+  {#if reconnecting}
+    <span class="pill"><span class="dot pulse"></span>연결 중…</span>
+  {:else if connected}
     <span class="pill"><span class="dot" class:on={online}></span>{online ? "온라인" : "오프라인"}</span>
   {:else}
     <span class="status">{status}</span>
@@ -614,6 +616,8 @@ decku</code></pre>
   .status { color: var(--muted); font-size: 0.82rem; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); display: inline-block; }
   .dot.on { background: #21b35a; }
+  .dot.pulse { background: var(--accent); animation: dotpulse 1s ease-in-out infinite; }
+  @keyframes dotpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
   .spacer { margin-left: auto; }
 
   button { font-family: inherit; }
