@@ -26,13 +26,18 @@ import { apiRealtimeToken } from "./api.js";
 import type { BridgeConfig } from "./config.js";
 
 const REFRESH_MS = 50 * 60 * 1000; // realtime 토큰 1h 만료 전 갱신
+const HEALTH_MS = 15 * 1000; // 연결 상태 점검 주기 (끊겼으면 재구독)
 
 export class BridgeRealtime {
   private supabase: SupabaseClient;
   private key!: CryptoKey;
-  private sessionsCh!: RealtimeChannel;
+  private sessionsCh?: RealtimeChannel;
+  private cmdCh?: RealtimeChannel;
   private txChs = new Map<string, RealtimeChannel>();
   private refreshTimer?: ReturnType<typeof setInterval>;
+  private watchdog?: ReturnType<typeof setInterval>;
+  private healing = false;
+  private onCmd?: (cmd: CmdPayload) => void;
   private subscribers = 0; // sessions 채널에 presence 등록한 브라우저 수
   private onJoin?: () => void; // 0→1 전환 시(누군가 보기 시작) 콜백
 
@@ -52,12 +57,19 @@ export class BridgeRealtime {
   }
 
   async connect(onCmd: (cmd: CmdPayload) => void): Promise<void> {
+    this.onCmd = onCmd;
     this.key = await importKey(decodeKey(this.cfg.e2eeKey));
     await this.refreshToken();
     this.refreshTimer = setInterval(() => {
       this.refreshToken().catch((e) => console.error("토큰 갱신 실패:", e));
     }, REFRESH_MS);
+    await this.subscribe();
+    // 워치독: 채널이 끊겨 있으면(랩탑 sleep로 소켓 종료/토큰 만료 등) 토큰 갱신 후 재구독
+    this.watchdog = setInterval(() => void this.ensureHealthy(), HEALTH_MS);
+  }
 
+  /** sessions + cmd 채널 구독 (재연결 시 재사용). */
+  private async subscribe(): Promise<void> {
     this.sessionsCh = await this.joinPrivate(sessionsChannel(this.cfg.namespace), {
       onPresence: (count) => {
         const had = this.subscribers > 0;
@@ -65,13 +77,33 @@ export class BridgeRealtime {
         if (!had && count > 0) this.onJoin?.();
       },
     });
-    await this.joinPrivate(cmdChannel(this.cfg.namespace), {
+    this.cmdCh = await this.joinPrivate(cmdChannel(this.cfg.namespace), {
       onMsg: (env) => {
         decrypt<CmdPayload>(this.key, env)
-          .then(onCmd)
+          .then((c) => this.onCmd?.(c))
           .catch((e) => console.error("cmd 복호 실패:", e));
       },
     });
+  }
+
+  /** 끊긴 연결 자가복구: sessions 채널이 joined가 아니면 토큰 갱신 + 전체 재구독. */
+  private async ensureHealthy(): Promise<void> {
+    if (this.healing) return;
+    if (String(this.sessionsCh?.state) === "joined") return;
+    this.healing = true;
+    console.warn(`realtime 재연결 중… (sessions 상태: ${this.sessionsCh?.state})`);
+    try {
+      await this.refreshToken();
+      await this.supabase.removeAllChannels();
+      this.txChs.clear();
+      this.subscribers = 0;
+      await this.subscribe();
+      console.log("realtime 재연결됨");
+    } catch (e) {
+      console.error("realtime 재연결 실패(다음 주기에 재시도):", (e as Error).message);
+    } finally {
+      this.healing = false;
+    }
   }
 
   private async refreshToken(): Promise<void> {
@@ -122,11 +154,13 @@ export class BridgeRealtime {
   }
 
   async publishSessions(payload: SessionsPayload): Promise<void> {
+    if (!this.sessionsCh) return; // 재연결 중
     const env = await encrypt(this.key, payload);
     await this.broadcast(this.sessionsCh, env);
   }
 
   async publishHistory(payload: HistoryPayload): Promise<void> {
+    if (!this.sessionsCh) return;
     const env = await encrypt(this.key, payload);
     await this.broadcast(this.sessionsCh, env);
   }
@@ -149,6 +183,7 @@ export class BridgeRealtime {
 
   async close(): Promise<void> {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
+    if (this.watchdog) clearInterval(this.watchdog);
     await this.supabase.removeAllChannels();
   }
 }
