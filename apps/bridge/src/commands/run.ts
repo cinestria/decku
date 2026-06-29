@@ -181,11 +181,17 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   }
 
   let stopped = false;
-  const stop = () => {
+  const shutdown = () => {
+    if (stopped) process.exit(0); // 두 번째 Ctrl-C → 즉시
     stopped = true;
+    console.log(`\n${DIM}종료 중…${RESET}`);
+    // 정리(채널 unsubscribe)는 시도하되, 느리면 800ms 후 강제 종료
+    const force = setTimeout(() => process.exit(0), 800);
+    force.unref?.();
+    void rt.close().finally(() => process.exit(0));
   };
-  process.on("SIGINT", stop);
-  process.on("SIGTERM", stop);
+  process.on("SIGINT", shutdown);
+  process.on("SIGTERM", shutdown);
 
   let lastSessionsJson = "";
   let lastPublish = 0;
@@ -239,9 +245,7 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
 
     await sleep(POLL_MS);
   }
-
-  await rt.close();
-  console.log(`${DIM}bye${RESET}`);
+  // 루프 탈출 시 정리는 shutdown()이 처리(강제 종료 포함)
 }
 
 
@@ -276,8 +280,12 @@ async function runConsole(argv: string[]): Promise<void> {
   console.log(`${DIM}…watching (Ctrl-C 종료)${RESET}`);
 
   let stopped = false;
-  process.on("SIGINT", () => (stopped = true));
-  process.on("SIGTERM", () => (stopped = true));
+  const quit = () => {
+    stopped = true;
+    process.exit(0); // 콘솔 모드는 정리할 것 없음 → 즉시
+  };
+  process.on("SIGINT", quit);
+  process.on("SIGTERM", quit);
 
   while (!stopped) {
     const current = (await liveSessions(await scanSessions())).filter(matches);
