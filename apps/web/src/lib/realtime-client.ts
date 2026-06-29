@@ -30,7 +30,6 @@ export class DeckuClient {
   private cmdCh?: RealtimeChannel;
   private txCh?: RealtimeChannel;
   private refreshTimer?: ReturnType<typeof setInterval>;
-  private watchTimer?: ReturnType<typeof setInterval>;
 
   constructor(private p: Pairing) {
     const url = env.PUBLIC_SUPABASE_URL;
@@ -52,19 +51,12 @@ export class DeckuClient {
     this.refreshTimer = setInterval(() => {
       void this.refresh().catch((e) => console.error("토큰 갱신 실패:", e));
     }, REFRESH_MS);
-    const sessionsCh = await this.join(sessionsChannel(this.p.ns), async (env) => {
+    await this.join(sessionsChannel(this.p.ns), async (env) => {
       const payload = await decrypt<SessionsPayload | HistoryPayload>(this.key, env);
       if (payload.type === "sessions") handlers.onSessions(payload.items);
       else if (payload.type === "history") handlers.onHistory?.(payload.items);
     });
-    // presence 등록 → 브릿지가 "보는 사람 있음"을 알고 그때만 heartbeat 전송
-    await sessionsCh.track({ at: Date.now() });
     this.cmdCh = await this.join(cmdChannel(this.p.ns)); // 송신용
-    // watch keepalive(presence 폴백) — 보는 동안 12s마다 신호 (브릿지 TTL 60s, 깜빡임 방지)
-    await this.sendCmd({ op: "watch" });
-    this.watchTimer = setInterval(() => {
-      void this.sendCmd({ op: "watch" }).catch(() => {});
-    }, 12_000);
   }
 
   /** 과거 세션 기록 요청 (브릿지가 history 채널로 응답). */
@@ -153,7 +145,6 @@ export class DeckuClient {
 
   async stop(): Promise<void> {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
-    if (this.watchTimer) clearInterval(this.watchTimer);
     await this.sb.removeAllChannels();
   }
 }

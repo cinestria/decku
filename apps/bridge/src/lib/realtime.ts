@@ -38,17 +38,6 @@ export class BridgeRealtime {
   private watchdog?: ReturnType<typeof setInterval>;
   private healing = false;
   private onCmd?: (cmd: CmdPayload) => void;
-  private subscribers = 0; // sessions 채널에 presence 등록한 브라우저 수
-  private onJoin?: () => void; // 0→1 전환 시(누군가 보기 시작) 콜백
-
-  /** 지금 보고 있는 브라우저가 있나 (heartbeat 게이트). */
-  hasSubscribers(): boolean {
-    return this.subscribers > 0;
-  }
-  /** 구독자가 0→1로 늘어난 순간 호출(즉시 목록 publish 용). */
-  onSubscriberJoin(cb: () => void): void {
-    this.onJoin = cb;
-  }
 
   constructor(private cfg: BridgeConfig) {
     this.supabase = createClient(cfg.supabaseUrl, cfg.supabaseAnonKey, {
@@ -70,19 +59,11 @@ export class BridgeRealtime {
 
   /** sessions + cmd 채널 구독 (재연결 시 재사용). */
   private async subscribe(): Promise<void> {
-    this.sessionsCh = await this.joinPrivate(sessionsChannel(this.cfg.namespace), {
-      onPresence: (count) => {
-        const had = this.subscribers > 0;
-        this.subscribers = count;
-        if (!had && count > 0) this.onJoin?.();
-      },
-    });
-    this.cmdCh = await this.joinPrivate(cmdChannel(this.cfg.namespace), {
-      onMsg: (env) => {
-        decrypt<CmdPayload>(this.key, env)
-          .then((c) => this.onCmd?.(c))
-          .catch((e) => console.error("cmd 복호 실패:", e));
-      },
+    this.sessionsCh = await this.joinPrivate(sessionsChannel(this.cfg.namespace));
+    this.cmdCh = await this.joinPrivate(cmdChannel(this.cfg.namespace), (env) => {
+      decrypt<CmdPayload>(this.key, env)
+        .then((c) => this.onCmd?.(c))
+        .catch((e) => console.error("cmd 복호 실패:", e));
     });
   }
 
@@ -98,7 +79,6 @@ export class BridgeRealtime {
       await this.refreshToken();
       await this.supabase.removeAllChannels();
       this.txChs.clear();
-      this.subscribers = 0;
       await this.subscribe();
       console.log("realtime 재연결됨");
     } catch (e) {
@@ -113,13 +93,12 @@ export class BridgeRealtime {
     await this.supabase.realtime.setAuth(token);
   }
 
-  /** private 채널 구독. onMsg 수신용·onPresence 구독자수 감지. MissingPartition 일시 에러는 재시도. */
+  /** private 채널 구독. onMsg 있으면 수신용, 없으면 송신 전용. MissingPartition 일시 에러는 재시도. */
   private async joinPrivate(
     topic: string,
-    opts: { onMsg?: (env: EncryptedEnvelope) => void; onPresence?: (count: number) => void } = {},
+    onMsg?: (env: EncryptedEnvelope) => void,
     attempt = 0,
   ): Promise<RealtimeChannel> {
-    const { onMsg, onPresence } = opts;
     try {
       return await new Promise<RealtimeChannel>((resolve, reject) => {
         const ch = this.supabase.channel(topic, {
@@ -129,13 +108,6 @@ export class BridgeRealtime {
           ch.on("broadcast", { event: "msg" }, ({ payload }) =>
             onMsg(payload as EncryptedEnvelope),
           );
-        }
-        if (onPresence) {
-          // 브라우저가 track()으로 등록한 presence 수 = 보고 있는 기기 수
-          const emit = () => onPresence(Object.keys(ch.presenceState()).length);
-          ch.on("presence", { event: "sync" }, emit);
-          ch.on("presence", { event: "join" }, emit);
-          ch.on("presence", { event: "leave" }, emit);
         }
         ch.subscribe((status, err) => {
           if (status === "SUBSCRIBED") resolve(ch);
@@ -149,7 +121,7 @@ export class BridgeRealtime {
       // RLS 적용 직후 등 일시적 MissingPartition → 짧게 재시도
       if (attempt < 4) {
         await sleep(400 * (attempt + 1));
-        return this.joinPrivate(topic, opts, attempt + 1);
+        return this.joinPrivate(topic, onMsg, attempt + 1);
       }
       throw err;
     }
@@ -170,7 +142,7 @@ export class BridgeRealtime {
   async publishTx(payload: TxPayload): Promise<void> {
     let ch = this.txChs.get(payload.sessionId);
     if (!ch) {
-      ch = await this.joinPrivate(txChannel(this.cfg.namespace, payload.sessionId), {});
+      ch = await this.joinPrivate(txChannel(this.cfg.namespace, payload.sessionId));
       this.txChs.set(payload.sessionId, ch);
     }
     const env = await encrypt(this.key, payload);

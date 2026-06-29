@@ -21,7 +21,6 @@ import { historyList, findTranscript } from "../lib/history.js";
 
 const POLL_MS = 1000;
 const HEARTBEAT_MS = 4000; // 늦게 접속한 브라우저도 목록 받도록 주기적 재전송 (broadcast는 replay 없음)
-const WATCH_TTL_MS = 60000; // 마지막 watch-ping 후 이 시간까지 "보는 중" 간주 (브라우저 12s 주기 → 5배 마진, 깜빡임 방지)
 const BACKFILL_CHUNK = 40; // 이벤트/청크 (메시지 크기 한도 회피)
 const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";
@@ -66,20 +65,7 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   const replay = new ReplayGuard();
   let liveMap = new Map<string, SessionFile>();
 
-  // 시청 판정: presence(즉시) 또는 최근 watch-ping(폴백). 둘 중 하나면 "보는 중".
-  let lastWatch = 0;
-  let forcePublish = false;
-  const watching = () => rt.hasSubscribers() || Date.now() - lastWatch < WATCH_TTL_MS;
-  rt.onSubscriberJoin(() => {
-    forcePublish = true;
-  });
-
   await rt.connect((cmd: CmdPayload) => {
-    lastWatch = Date.now(); // 어떤 cmd든 = 누군가 보고 있음
-    if (cmd.op === "watch") {
-      forcePublish = true; // 새로 보기 시작 → 즉시 목록 publish
-      return;
-    }
     void handleCmd(cmd).catch((e) => console.error("cmd 처리 실패:", e));
   });
 
@@ -195,11 +181,11 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
 
   let lastSessionsJson = "";
   let lastPublish = 0;
-  let idleLogged = false;
   while (!stopped) {
     const live = await liveSessions(await scanSessions());
     liveMap = new Map(live.map((s) => [s.sessionId, s]));
 
+    // 목록 변화 시 또는 heartbeat 주기마다 publish (늦은 접속자 대비)
     const now = Date.now();
     const items = await Promise.all(
       live.map(async (s) => {
@@ -209,37 +195,22 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
       }),
     );
     const json = JSON.stringify(items);
+    if (json !== lastSessionsJson || now - lastPublish > HEARTBEAT_MS) {
+      lastSessionsJson = json;
+      lastPublish = now;
+      await rt.publishSessions({ type: "sessions", items });
+    }
 
-    // 보는 사람이 없으면 publish 안 함 (Supabase 메시지 절약).
-    if (!watching()) {
-      if (!idleLogged) {
-        console.log(`${DIM}💤 보는 사람 없음 — 중계 일시정지 (heartbeat 안 보냄)${RESET}`);
-        idleLogged = true;
+    // active 세션 live append
+    for (const [sid, tail] of activeTails) {
+      if (!liveMap.has(sid)) {
+        activeTails.delete(sid);
+        continue;
       }
-    } else {
-      if (idleLogged) {
-        console.log(`${DIM}👀 시청 시작 — 중계 재개${RESET}`);
-        idleLogged = false;
-      }
-      // 목록 변화 / heartbeat 주기 / 새 구독자 진입 시 publish
-      if (forcePublish || json !== lastSessionsJson || now - lastPublish > HEARTBEAT_MS) {
-        lastSessionsJson = json;
-        lastPublish = now;
-        forcePublish = false;
-        await rt.publishSessions({ type: "sessions", items });
-      }
-
-      // active 세션 live append (보고 있을 때만)
-      for (const [sid, tail] of activeTails) {
-        if (!liveMap.has(sid)) {
-          activeTails.delete(sid);
-          continue;
-        }
-        const events = await tail.readNew();
-        if (events.length) {
-          await rt.publishTx({ type: "tx", sessionId: sid, events });
-          console.log(`${DIM}↑ tx ${shortId(sid)}: ${events.length}${RESET}`);
-        }
+      const events = await tail.readNew();
+      if (events.length) {
+        await rt.publishTx({ type: "tx", sessionId: sid, events });
+        console.log(`${DIM}↑ tx ${shortId(sid)}: ${events.length}${RESET}`);
       }
     }
 

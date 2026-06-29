@@ -99,7 +99,5 @@ export const CmdPayloadSchema = z.discriminatedUnion("op", [
   }),
   // 과거 세션 기록 요청
   z.object({ op: z.literal("history"), limit: z.number().optional() }),
-  // 시청 중 신호(keepalive) — 브릿지가 "보는 사람 있음" 판정 (presence 폴백)
-  z.object({ op: z.literal("watch") }),
 ]);
 export type CmdPayload = z.infer<typeof CmdPayloadSchema>;
