@@ -59,7 +59,7 @@ async function runClaude(cwd: string, args: string[], stdin?: string, attempt = 
   }
 }
 
-const INJECT_TIMEOUT_MS = 5 * 60 * 1000; // 응답이 이 시간 넘게 안 끝나면 멈춘 것으로 보고 종료
+const INJECT_TIMEOUT_MS = 2 * 60 * 1000; // 응답이 이 시간 넘게 안 끝나면 멈춘 것으로 보고 종료
 
 function spawnClaude(cwd: string, args: string[], stdin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
