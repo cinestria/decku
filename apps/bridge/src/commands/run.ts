@@ -11,7 +11,7 @@ import type { SessionFile, SessionListItem, TxPayload, CmdPayload, RenderEvent }
 import { scanSessions, liveSessions, transcriptPath } from "../lib/sessions.js";
 import { TranscriptTail } from "../lib/tail.js";
 import { renderEvent } from "../lib/render.js";
-import { loadConfig } from "../lib/config.js";
+import { loadConfig, saveConfig, type BridgeConfig } from "../lib/config.js";
 import { createPairing, printPairing, pairUrl } from "./pair.js";
 import { ReplayGuard } from "../lib/replay.js";
 import { BridgeRealtime } from "../lib/realtime.js";
@@ -53,8 +53,8 @@ export async function run(argv: string[] = []): Promise<void> {
   return runRealtime(cfg, argv);
 }
 
-/** realtime 연결 전 claude 인증 확인. 만료/미인증이면 (TTY에서) `claude login` 유도 후 재확인. */
-async function ensureClaudeAuth(): Promise<void> {
+/** realtime 연결 전 claude 인증 확인. 만료/미인증이면 (TTY에서) setup-token으로 토큰 발급·저장 후 재확인. */
+async function ensureClaudeAuth(cfg: BridgeConfig): Promise<void> {
   process.stdout.write(`${DIM}claude 인증 확인 중…${RESET} `);
   let auth = await checkClaudeAuth();
   if (auth.ok) {
@@ -64,26 +64,36 @@ async function ensureClaudeAuth(): Promise<void> {
   console.log(`\n${BOLD}⚠ claude 인증이 필요합니다${RESET} ${DIM}(${auth.detail})${RESET}`);
 
   if (process.stdin.isTTY) {
-    console.log(`${DIM}'claude setup-token' 으로 로그인합니다 — 브라우저에서 완료하세요…${RESET}\n`);
-    await claudeSetupToken();
+    console.log(`${DIM}'claude setup-token' 으로 토큰을 발급합니다 — 브라우저에서 완료하세요…${RESET}\n`);
+    const token = await claudeSetupToken();
+    if (token) {
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = token; // 현재 프로세스의 claude -p에 즉시 적용
+      cfg.oauthToken = token;
+      await saveConfig(cfg); // ~/.decku/config.json 에 저장 → 이후 자동 적용
+      console.log(`${DIM}토큰을 저장했어요 (~/.decku) — 앞으로 자동 적용됩니다.${RESET}`);
+    }
     auth = await checkClaudeAuth();
     if (auth.ok) {
       console.log(`${DIM}✓ 인증 완료 — 메시지 전송 가능${RESET}\n`);
       return;
     }
   }
-  // 비TTY(launchd 등)이거나 로그인 후에도 실패 → 읽기는 되니 계속 진행, 안내만
+  // 비TTY(launchd 등)이거나 실패 → 읽기는 되니 계속 진행, 안내만
   console.log(
     `${BOLD}⚠ 인증 안 됨 — 읽기·목록은 되지만 메시지 전송은 안 됩니다.${RESET}\n` +
-      `${DIM}   터미널에서  ${RESET}${BOLD}claude setup-token${RESET}${DIM} (또는 claude 안에서 ${RESET}${BOLD}/login${RESET}${DIM}) 후 decku 재시작.${RESET}\n`,
+      `${DIM}   ${RESET}${BOLD}claude setup-token${RESET}${DIM} 의 토큰을  ${RESET}${BOLD}export CLAUDE_CODE_OAUTH_TOKEN=...${RESET}${DIM} 설정 후 decku 재시작.${RESET}\n`,
   );
 }
 
 // ───────────────────────── realtime 모드 ─────────────────────────
 
 async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig>>>, argv: string[]): Promise<void> {
-  // realtime 연결 전에 claude 인증부터 (메시지 전송에 필요). 만료면 로그인 유도.
-  await ensureClaudeAuth();
+  // 저장된 OAuth 토큰이 있으면 claude -p가 쓰도록 환경에 적용
+  if (cfg.oauthToken && !process.env.CLAUDE_CODE_OAUTH_TOKEN) {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = cfg.oauthToken;
+  }
+  // realtime 연결 전에 claude 인증부터 (메시지 전송에 필요). 만료면 setup-token 유도.
+  await ensureClaudeAuth(cfg);
 
   console.log(`${BOLD}decku${RESET} realtime 연결 중… (namespace ${shortId(cfg.namespace)}…)`);
   const rt = new BridgeRealtime(cfg);

@@ -13,6 +13,7 @@ export interface BridgeConfig {
   supabaseUrl: string;
   supabaseAnonKey: string;
   pairingToken?: string; // --expire-days 페어링 시에만. realtime-token 발급 게이트.
+  oauthToken?: string; // claude setup-token 결과(CLAUDE_CODE_OAUTH_TOKEN) — 헤드리스 claude -p 인증용
 }
 
 export const DECKU_DIR = join(homedir(), ".decku");

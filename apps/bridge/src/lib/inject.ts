@@ -36,12 +36,28 @@ export function checkClaudeAuth(): Promise<{ ok: boolean; detail?: string }> {
   });
 }
 
-/** `claude setup-token` 대화형 실행 (TTY에서만) — 헤드리스용 장기 인증 토큰을 OAuth로 발급. */
-export function claudeSetupToken(): Promise<boolean> {
+/**
+ * `claude setup-token` 대화형 실행 (TTY) — 헤드리스용 장기 OAuth 토큰 발급.
+ * setup-token은 토큰을 저장하지 않고 출력만 하므로, 출력을 다시 보여주면서 `sk-ant-oat…` 토큰을 캡처해 반환.
+ */
+export function claudeSetupToken(): Promise<string | null> {
   return new Promise((resolve) => {
-    const child = spawn("claude", ["setup-token"], { stdio: "inherit", env: process.env });
-    child.on("error", () => resolve(false));
-    child.on("close", (code) => resolve(code === 0));
+    // stdin은 inherit(입력), stdout·stderr는 pipe해서 토큰 캡처 + 그대로 재출력(사용자가 흐름·토큰을 봄)
+    const child = spawn("claude", ["setup-token"], { stdio: ["inherit", "pipe", "pipe"], env: process.env });
+    let buf = "";
+    child.stdout?.on("data", (d) => {
+      buf += String(d);
+      process.stdout.write(d);
+    });
+    child.stderr?.on("data", (d) => {
+      buf += String(d);
+      process.stderr.write(d);
+    });
+    child.on("error", () => resolve(null));
+    child.on("close", () => {
+      const m = buf.match(/sk-ant-oat\d+-[A-Za-z0-9_-]+/);
+      resolve(m ? m[0] : null);
+    });
   });
 }
 
