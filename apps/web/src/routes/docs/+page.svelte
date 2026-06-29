@@ -2,7 +2,6 @@
 
 <main class="docs">
   <header class="dhead">
-    <a class="back" href="/">‹ decku</a>
     <h1>명령어 문서</h1>
     <p class="muted">
       Mac에 작은 브릿지를 띄워 Claude 세션을 웹앱에 연결합니다. 설치 없이
@@ -75,8 +74,6 @@ decku uninstall   # 자동 시작 해제</code></pre>
 <style>
   .docs { max-width: 40rem; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; font-family: system-ui, -apple-system, sans-serif; }
   .dhead { margin-bottom: 2rem; }
-  .back { display: inline-block; color: var(--muted); text-decoration: none; font-size: 0.85rem; margin-bottom: 0.75rem; }
-  .back:hover { color: var(--text); }
   .dhead h1 { font-size: 1.7rem; letter-spacing: -0.02em; margin: 0 0 0.6rem; }
   .dhead p { line-height: 1.65; margin: 0; }
 
@@ -100,5 +97,4 @@ decku uninstall   # 자동 시작 해제</code></pre>
   strong { font-weight: 600; }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
-  .back:hover { text-decoration: none; }
 </style>

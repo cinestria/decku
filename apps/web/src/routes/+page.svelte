@@ -598,8 +598,6 @@ decku pair</code></pre>
   .small { font-size: 0.8rem; }
 
   .lfoot { margin-top: 3rem; text-align: center; color: var(--muted); font-size: 0.8rem; }
-  .lfoot a { color: var(--accent); text-decoration: none; }
-  .lfoot a:hover { text-decoration: underline; }
 
   .scanner { width: 100%; max-width: 320px; border-radius: 14px; background: #000; margin: 1rem auto; }
   .err { color: var(--danger); }

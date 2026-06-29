@@ -47,7 +47,6 @@
 
 <main class="faq">
   <header class="fhead">
-    <a class="back" href="/">‹ decku</a>
     <h1>자주 묻는 질문</h1>
   </header>
 
@@ -69,8 +68,6 @@
 <style>
   .faq { max-width: 36rem; margin: 0 auto; padding: 2.5rem 1.5rem 4rem; font-family: system-ui, -apple-system, sans-serif; }
   .fhead { margin-bottom: 1.75rem; }
-  .back { display: inline-block; color: var(--muted); text-decoration: none; font-size: 0.85rem; margin-bottom: 0.75rem; }
-  .back:hover { color: var(--text); }
   .fhead h1 { font-size: 1.7rem; letter-spacing: -0.02em; margin: 0; }
 
   .list { display: grid; gap: 0.6rem; }
