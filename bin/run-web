@@ -1,0 +1,27 @@
+#!/usr/bin/env bash
+# decku 웹 dev 서버 실행 — 어디서 실행하든 레포 루트를 찾아 vite dev를 띄운다.
+#
+# 사용:
+#   bin/run-web                # 기본(localhost) 개발 서버
+#   bin/run-web --open         # 브라우저 자동 열기
+#   bin/run-web --host         # LAN(폰)에서 접속 가능하게 0.0.0.0 바인드
+#   추가 인자는 그대로 vite로 전달됩니다 (예: --port 3000).
+set -euo pipefail
+
+# 스크립트 위치 기준으로 레포 루트 계산 (심볼릭링크 대응)
+SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SOURCE" ]; do
+  DIR="$(cd -P "$(dirname "$SOURCE")" >/dev/null 2>&1 && pwd)"
+  SOURCE="$(readlink "$SOURCE")"
+  [[ $SOURCE != /* ]] && SOURCE="$DIR/$SOURCE"
+done
+ROOT="$(cd -P "$(dirname "$SOURCE")/.." >/dev/null 2>&1 && pwd)"
+
+if ! command -v pnpm >/dev/null 2>&1; then
+  echo "✗ pnpm이 필요합니다. https://pnpm.io/installation" >&2
+  exit 1
+fi
+
+echo "▶ decku web dev — $ROOT/apps/web"
+cd "$ROOT"
+exec pnpm --filter web dev "$@"
