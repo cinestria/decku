@@ -341,6 +341,9 @@
   {#if !standalone && (installPrompt || isIos)}
     <button class="ghost" onclick={installApp}>📲 설치</button>
   {/if}
+  {#if !pairing}
+    <button class="cta" onclick={startScan}>📷 페어링</button>
+  {/if}
   {#if pairing}
     <button class="ghost" onclick={showPhoneQr}>📱 폰 추가</button>
     <button class="ghost" onclick={unpair}>해제</button>
@@ -361,6 +364,25 @@
       <img src={qrUrl} alt="페어링 QR" width="280" height="280" />
       <p class="muted small">같은 페어링(같은 namespace) — e2eeKey가 들어있으니 본인 기기만.</p>
       <button onclick={() => (qrUrl = null)}>닫기</button>
+    </div>
+  </div>
+{/if}
+
+{#if scanning}
+  <div
+    class="qr-overlay"
+    role="button"
+    tabindex="0"
+    onclick={stopScan}
+    onkeydown={(e) => e.key === "Escape" && stopScan()}
+  >
+    <div class="qr-card" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+      <h3>카메라로 페어링</h3>
+      <p class="muted">Mac 터미널에 뜬 decku QR을 카메라에 비추세요.</p>
+      <!-- svelte-ignore a11y_media_has_caption -->
+      <video bind:this={videoEl} autoplay playsinline muted class="scanner"></video>
+      {#if scanError}<p class="err">{scanError}</p>{/if}
+      <button onclick={stopScan}>취소</button>
     </div>
   </div>
 {/if}
@@ -413,17 +435,8 @@ decku pair</code></pre>
         <span class="num">2</span>
         <div class="step-body">
           <h2>QR로 페어링</h2>
-          <p class="muted">터미널에 뜬 QR을 폰 기본 카메라로 찍거나, 이 기기 카메라로 스캔하세요.</p>
-
-          {#if scanning}
-            <!-- svelte-ignore a11y_media_has_caption -->
-            <video bind:this={videoEl} autoplay playsinline muted class="scanner"></video>
-            <p class="muted">decku QR을 카메라에 비추세요…</p>
-            <button onclick={stopScan}>취소</button>
-          {:else}
-            <button class="primary" onclick={startScan}>📷 카메라로 페어링</button>
-          {/if}
-          {#if scanError}<p class="err">{scanError}</p>{/if}
+          <p class="muted">터미널에 뜬 QR을 폰 기본 카메라로 찍거나, 아래 버튼으로 이 기기 카메라로 스캔하세요.</p>
+          <button class="primary" onclick={startScan}>📷 카메라로 페어링</button>
         </div>
       </div>
     </section>
@@ -555,6 +568,8 @@ decku pair</code></pre>
   .ghost { font-size: 0.8rem; padding: 0.35rem 0.7rem; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; cursor: pointer; }
   .ghost:hover { background: var(--surface); }
   a.nav { text-decoration: none; display: inline-flex; align-items: center; font-weight: 500; }
+  .cta { font-size: 0.8rem; padding: 0.4rem 0.8rem; border: 0; background: var(--accent); color: #fff; border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap; }
+  .cta:hover { filter: brightness(1.05); }
   .primary { padding: 0.7rem 1.4rem; border-radius: 10px; border: 0; background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
   .primary:hover { filter: brightness(1.05); }
 
