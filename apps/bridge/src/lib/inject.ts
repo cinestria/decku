@@ -65,6 +65,41 @@ export async function claudeSetupToken(): Promise<string | null> {
   return m ? m[0] : null;
 }
 
+/** 새 세션 시작 — cwd에서 첫 메시지로 `claude -p`(--resume 없이) → 새 session_id 반환. */
+export function createSession(cwd: string, text: string): Promise<{ sessionId?: string; error?: string }> {
+  return new Promise((resolve) => {
+    const child = spawn("claude", ["-p", text, "--output-format", "json"], {
+      cwd,
+      stdio: ["ignore", "pipe", "pipe"],
+      env: process.env,
+    });
+    let out = "";
+    let err = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, INJECT_TIMEOUT_MS);
+    child.stdout?.on("data", (d) => (out += String(d)));
+    child.stderr?.on("data", (d) => (err += String(d)));
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      resolve({ error: e.message });
+    });
+    child.on("close", () => {
+      clearTimeout(timer);
+      if (timedOut) return resolve({ error: "응답 시간 초과(>2분)" });
+      try {
+        const j = JSON.parse(out.trim()) as { session_id?: string; is_error?: boolean; result?: string };
+        if (j.is_error) return resolve({ error: j.result ?? "오류" });
+        return j.session_id ? resolve({ sessionId: j.session_id }) : resolve({ error: "session_id 없음" });
+      } catch {
+        resolve({ error: (err.trim() || extractClaudeError(out) || "파싱 실패").slice(0, 200) });
+      }
+    });
+  });
+}
+
 export function injectMessage(
   cwd: string,
   sessionId: string,

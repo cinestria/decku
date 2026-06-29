@@ -19,6 +19,7 @@ import {
   type EncryptedEnvelope,
   type SessionsPayload,
   type HistoryPayload,
+  type CreatedPayload,
   type TxPayload,
   type CmdPayload,
 } from "@decku/shared";
@@ -134,6 +135,12 @@ export class BridgeRealtime {
   }
 
   async publishHistory(payload: HistoryPayload): Promise<void> {
+    if (!this.sessionsCh) return;
+    const env = await encrypt(this.key, payload);
+    await this.broadcast(this.sessionsCh, env);
+  }
+
+  async publishCreated(payload: CreatedPayload): Promise<void> {
     if (!this.sessionsCh) return;
     const env = await encrypt(this.key, payload);
     await this.broadcast(this.sessionsCh, env);

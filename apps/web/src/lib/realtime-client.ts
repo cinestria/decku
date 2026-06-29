@@ -45,6 +45,7 @@ export class DeckuClient {
   async start(handlers: {
     onSessions: (items: SessionListItem[]) => void;
     onHistory?: (items: SessionListItem[]) => void;
+    onCreated?: (p: { sessionId: string; cwd?: string; error?: string }) => void;
   }): Promise<void> {
     this.key = await importKey(decodeKey(this.p.k));
     await this.refresh();
@@ -52,9 +53,12 @@ export class DeckuClient {
       void this.refresh().catch((e) => console.error("토큰 갱신 실패:", e));
     }, REFRESH_MS);
     await this.join(sessionsChannel(this.p.ns), async (env) => {
-      const payload = await decrypt<SessionsPayload | HistoryPayload>(this.key, env);
+      const payload = await decrypt<
+        SessionsPayload | HistoryPayload | { type: "created"; sessionId: string; cwd?: string; error?: string }
+      >(this.key, env);
       if (payload.type === "sessions") handlers.onSessions(payload.items);
       else if (payload.type === "history") handlers.onHistory?.(payload.items);
+      else if (payload.type === "created") handlers.onCreated?.(payload);
     });
     this.cmdCh = await this.join(cmdChannel(this.p.ns)); // 송신용
   }
@@ -62,6 +66,11 @@ export class DeckuClient {
   /** 과거 세션 기록 요청 (브릿지가 history 채널로 응답). */
   async requestHistory(limit = 40): Promise<void> {
     await this.sendCmd({ op: "history", limit });
+  }
+
+  /** 새 세션 시작 — cwd에서 첫 메시지로 새 claude 세션 생성. 완료 시 onCreated. */
+  async newSession(cwd: string, text: string): Promise<void> {
+    await this.sendCmd({ op: "new", cwd, text });
   }
 
   /** 세션 열기: 그 tx 채널 구독 + 백필 요청. onTx로 복호된 페이로드 전달. */

@@ -15,7 +15,7 @@ import { loadConfig, saveConfig, type BridgeConfig } from "../lib/config.js";
 import { createPairing, printPairing, pairUrl } from "./pair.js";
 import { ReplayGuard } from "../lib/replay.js";
 import { BridgeRealtime } from "../lib/realtime.js";
-import { injectMessage, claudeLoggedIn, claudeSetupToken, isAuthError } from "../lib/inject.js";
+import { injectMessage, createSession, claudeLoggedIn, claudeSetupToken, isAuthError } from "../lib/inject.js";
 import { TitleCache } from "../lib/titles.js";
 import { historyList, findTranscript } from "../lib/history.js";
 
@@ -231,6 +231,18 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
       const items = await historyList(cmd.limit ?? 40);
       await rt.publishHistory({ type: "history", items });
       console.log(`${DIM}↑ history: ${items.length}${RESET}`);
+    } else if (cmd.op === "new") {
+      console.log(`${DIM}↓ new (${cmd.cwd}): "${cmd.text.slice(0, 40)}" (생성 중…)${RESET}`);
+      const res = await createSession(cmd.cwd, cmd.text);
+      if (res.sessionId) {
+        console.log(`${DIM}  새 세션 ${shortId(res.sessionId)} 생성됨${RESET}`);
+        await rt.publishCreated({ type: "created", sessionId: res.sessionId, cwd: cmd.cwd });
+        await rt.publishHistory({ type: "history", items: await historyList(40) }); // 목록 갱신
+      } else {
+        console.error(`new 실패: ${res.error}`);
+        await rt.publishCreated({ type: "created", sessionId: "", error: res.error });
+        if (res.error && isAuthError(res.error)) void handleAuthFailure(cfg);
+      }
     }
   }
 

@@ -20,6 +20,15 @@
     const liveIds = new Set(sessions.map((s) => s.sessionId));
     return history.filter((h) => !liveIds.has(h.sessionId));
   });
+  const matchQ = (s: SessionListItem) => {
+    const q = query.trim().toLowerCase();
+    if (!q) return true;
+    return ((s.title ?? "") + " " + s.cwd).toLowerCase().includes(q);
+  };
+  let liveShown = $derived(sessions.filter(matchQ));
+  let pastShown = $derived(pastSessions.filter(matchQ));
+  // 새 세션 cwd 후보(기존 세션들의 폴더)
+  let cwdOptions = $derived([...new Set([...sessions, ...history].map((s) => s.cwd))].filter((c) => c && c !== "(unknown)"));
   let selected = $state<string | null>(null);
   // 낙관적 전송용 마커(_id 있으면 내가 방금 보낸 것: _pending=스피너, 확인=✓, _failed=⚠)
   type UiEvent = RenderEvent & { _id?: string; _pending?: boolean; _failed?: boolean };
@@ -33,6 +42,13 @@
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
   let menuOpen = $state(false); // 모바일 헤더 ☰ 메뉴
+  let query = $state(""); // 세션 검색
+  // 새 세션 만들기
+  let newOpen = $state(false);
+  let newCwd = $state("");
+  let newText = $state("");
+  let newBusy = $state(false);
+  let newError = $state("");
   let origin = $state("https://decku.app"); // 설치 안내 URL (SSR 폴백)
   // decku.app(기본 도메인)이면 --url 생략, 아니면 명시. 서브커맨드 없이 실행 → 필요 시 자동 페어링 후 중계
   let pairCmd = $derived(
@@ -149,6 +165,18 @@
       onHistory: (items) => {
         history = items;
         historyLoading = false;
+      },
+      onCreated: (p) => {
+        newBusy = false;
+        if (p.error) {
+          newError = p.error;
+          return;
+        }
+        if (p.sessionId) {
+          newOpen = false;
+          newText = "";
+          void loadSession(p.sessionId);
+        }
       },
     });
     connected = true;
@@ -383,6 +411,33 @@
     void client.requestHistory(40);
   }
 
+  function openNew() {
+    newError = "";
+    newText = "";
+    if (!newCwd && cwdOptions.length) newCwd = cwdOptions[0]!;
+    newOpen = true;
+  }
+
+  async function startNew() {
+    if (!client || newBusy) return;
+    const cwd = newCwd.trim();
+    const text = newText.trim();
+    if (!cwd || !text) {
+      newError = "폴더와 첫 메시지를 입력하세요.";
+      return;
+    }
+    newBusy = true;
+    newError = "";
+    await client.newSession(cwd, text);
+    // onCreated가 newBusy 해제 + 세션 열기. 안전망 타임아웃:
+    setTimeout(() => {
+      if (newBusy) {
+        newBusy = false;
+        newError = "응답이 없어요 (브릿지/claude 확인). 다시 시도하세요.";
+      }
+    }, 135_000);
+  }
+
   async function addImages(e: Event) {
     const input = e.target as HTMLInputElement;
     const files = Array.from(input.files ?? []);
@@ -576,6 +631,30 @@
   </div>
 {/if}
 
+{#if newOpen}
+  <div class="qr-overlay" role="button" tabindex="0" onclick={() => !newBusy && (newOpen = false)} onkeydown={(e) => e.key === "Escape" && !newBusy && (newOpen = false)}>
+    <div class="qr-card newcard" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
+      <h3>새 세션 시작</h3>
+      <label class="nl">폴더</label>
+      {#if cwdOptions.length}
+        <div class="cwd-picks">
+          {#each cwdOptions.slice(0, 6) as c}
+            <button type="button" class="pick" class:on={newCwd === c} onclick={() => (newCwd = c)}>{cwdName(c)}</button>
+          {/each}
+        </div>
+      {/if}
+      <input class="ninput" placeholder="/path/to/project" bind:value={newCwd} />
+      <label class="nl">첫 메시지</label>
+      <textarea class="ntext" rows="3" placeholder="무엇을 시작할까요?" bind:value={newText}></textarea>
+      {#if newError}<p class="err small">{newError}</p>{/if}
+      <div class="nbtns">
+        <button class="ghost" onclick={() => (newOpen = false)} disabled={newBusy}>취소</button>
+        <button class="primary" onclick={startNew} disabled={newBusy}>{newBusy ? "생성 중…" : "시작"}</button>
+      </div>
+    </div>
+  </div>
+{/if}
+
 {#if showIosHint}
   <div class="qr-overlay" role="button" tabindex="0" onclick={() => (showIosHint = false)} onkeydown={() => {}}>
     <div class="qr-card" role="dialog" aria-modal="true" tabindex="-1" onclick={(e) => e.stopPropagation()} onkeydown={() => {}}>
@@ -635,13 +714,18 @@ decku</code></pre>
 {:else}
   <div class="layout" class:has-sel={selected}>
     <aside>
+      <div class="aside-top">
+        <button class="new-btn" onclick={openNew}>＋ 새 세션</button>
+        <input class="search" placeholder="검색…" bind:value={query} />
+      </div>
+
       {#if connected && !online}
         <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku run</code> 확인.</p>
       {/if}
 
-      {#if sessions.length}
-        <div class="sec">활성 {sessions.length}</div>
-        {#each sessions as s (s.sessionId)}
+      {#if liveShown.length}
+        <div class="sec">활성 {liveShown.length}</div>
+        {#each liveShown as s (s.sessionId)}
           <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
             <span class="cwd"><span class="livedot"></span>{s.title ?? cwdName(s.cwd)}</span>
             <span class="path">{cwdName(s.cwd)}</span>
@@ -649,9 +733,9 @@ decku</code></pre>
         {/each}
       {/if}
 
-      {#if pastSessions.length || historyLoading}
+      {#if pastShown.length || historyLoading}
         <div class="sec">최근 {#if historyLoading}<span class="muted">…</span>{/if}</div>
-        {#each pastSessions as s (s.sessionId)}
+        {#each pastShown as s (s.sessionId)}
           <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
             <span class="cwd">{s.title ?? cwdName(s.cwd)}</span>
             <span class="path">{cwdName(s.cwd)}</span>
@@ -659,8 +743,8 @@ decku</code></pre>
         {/each}
       {/if}
 
-      {#if !sessions.length && !pastSessions.length && !historyLoading}
-        <p class="muted">{online ? "세션이 없어요." : "대기 중…"}</p>
+      {#if !liveShown.length && !pastShown.length && !historyLoading}
+        <p class="muted">{query ? "검색 결과 없음" : online ? "세션이 없어요." : "대기 중…"}</p>
       {/if}
     </aside>
 
@@ -854,7 +938,23 @@ decku</code></pre>
   /* dvh: 모바일 브라우저 chrome 제외한 실제 높이 → 입력바가 화면 밑으로 안 잘림 */
   .layout { display: grid; grid-template-columns: 17rem 1fr; height: calc(100vh - 50px); height: calc(100dvh - 50px); font-family: system-ui, sans-serif; }
   aside { border-right: 1px solid var(--border); overflow-y: auto; padding: 0.5rem; background: var(--bg); }
+  .aside-top { display: flex; gap: 0.4rem; padding: 0.15rem 0.15rem 0.4rem; }
+  .new-btn { flex: none; font-size: 0.82rem; font-weight: 600; padding: 0.4rem 0.7rem; border: 0; border-radius: 9px; background: var(--accent); color: #fff; cursor: pointer; white-space: nowrap; }
+  .new-btn:hover { filter: brightness(1.05); }
+  .search { flex: 1; min-width: 0; font-size: 16px; padding: 0.35rem 0.6rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; outline: none; }
+  .search:focus { border-color: var(--accent); }
   .sec { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; padding: 0.5rem 0.6rem 0.25rem; }
+
+  .newcard { width: 24rem; max-width: 92vw; text-align: left; }
+  .newcard h3 { text-align: center; }
+  .nl { display: block; font-size: 0.78rem; color: var(--muted); margin: 0.7rem 0 0.3rem; font-weight: 600; }
+  .cwd-picks { display: flex; flex-wrap: wrap; gap: 0.3rem; margin-bottom: 0.4rem; }
+  .pick { font-size: 0.78rem; padding: 0.3rem 0.6rem; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 999px; cursor: pointer; }
+  .pick.on { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .ninput, .ntext { width: 100%; font-size: 16px; padding: 0.5rem 0.7rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 9px; outline: none; font-family: inherit; }
+  .ninput:focus, .ntext:focus { border-color: var(--accent); }
+  .ntext { resize: vertical; }
+  .nbtns { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.9rem; }
   .livedot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #21b35a; margin-right: 0.4rem; vertical-align: 1px; }
 
   .session { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--text); padding: 0.55rem 0.6rem; border-radius: 10px; cursor: pointer; }

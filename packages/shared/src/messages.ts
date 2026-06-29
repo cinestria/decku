@@ -58,6 +58,15 @@ export const HistoryPayloadSchema = z.object({
 });
 export type HistoryPayload = z.infer<typeof HistoryPayloadSchema>;
 
+/** sessions 채널: 브릿지 → 브라우저, 새 세션 생성 완료 알림(웹이 해당 세션을 열도록). */
+export const CreatedPayloadSchema = z.object({
+  type: z.literal("created"),
+  sessionId: z.string(),
+  cwd: z.string().optional(),
+  error: z.string().optional(),
+});
+export type CreatedPayload = z.infer<typeof CreatedPayloadSchema>;
+
 /** 첨부 이미지 (base64). */
 export const ImageAttachmentSchema = z.object({
   mediaType: z.string(), // image/png 등
@@ -99,5 +108,7 @@ export const CmdPayloadSchema = z.discriminatedUnion("op", [
   }),
   // 과거 세션 기록 요청
   z.object({ op: z.literal("history"), limit: z.number().optional() }),
+  // 새 세션 시작 (cwd에서 첫 메시지로 claude -p 새 세션 생성)
+  z.object({ op: z.literal("new"), cwd: z.string(), text: z.string() }),
 ]);
 export type CmdPayload = z.infer<typeof CmdPayloadSchema>;
