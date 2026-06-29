@@ -486,11 +486,30 @@
             p._pending = false;
             p._failed = true;
           }
+        } else {
+          notifyResponse(ev); // 백그라운드면 알림
         }
       }
       toAppend.push(ev);
     }
     if (toAppend.length) events = [...events, ...toAppend];
+  }
+
+  function stopResponse() {
+    if (!client || !selected) return;
+    void client.stopResponse(selected);
+    setThinking(false);
+  }
+
+  /** 탭이 백그라운드일 때 응답 도착 알림 (페이지가 살아있는 동안). */
+  function notifyResponse(ev: RenderEvent) {
+    if (typeof document === "undefined" || !document.hidden) return;
+    if (typeof Notification === "undefined" || Notification.permission !== "granted") return;
+    try {
+      new Notification(`decku · ${selectedTitle || "Claude"}`, { body: msgText(ev).slice(0, 120) || "응답이 도착했어요" });
+    } catch {
+      /* noop */
+    }
   }
 
   function setThinking(on: boolean) {
@@ -521,6 +540,8 @@
     stick = true;
     events = [...events, optimistic];
     setThinking(true); // 응답 올 때까지 '생각 중…'
+    // 백그라운드 알림 권한 (첫 전송 시 1회 요청)
+    if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
 
     try {
       await client.sendChat(selected, text, imgs);
@@ -805,6 +826,7 @@ decku</code></pre>
                 <div class="bubble think">
                   <span class="dots"><i></i><i></i><i></i></span>
                   <span class="think-label">생각 중…</span>
+                  <button class="stop-btn" onclick={stopResponse} title="중단">■</button>
                 </div>
               </div>
             {/if}
@@ -1000,6 +1022,8 @@ decku</code></pre>
   .dots i:nth-child(3) { animation-delay: 0.4s; }
   @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
   .think-label { color: var(--muted); font-size: 0.85rem; }
+  .stop-btn { margin-left: 0.3rem; width: 20px; height: 20px; border-radius: 50%; border: 0; background: var(--danger); color: #fff; font-size: 0.6rem; line-height: 1; cursor: pointer; display: grid; place-items: center; }
+  .stop-btn:hover { filter: brightness(1.1); }
   .tool { color: #c07a00; font-family: ui-monospace, monospace; font-size: 0.82rem; }
   @media (prefers-color-scheme: dark) { .tool { color: #e0a64d; } }
   .toolrow { margin: 0.3rem 0; }

@@ -7,9 +7,22 @@
  *
  * 주의: cwd는 반드시 그 세션의 cwd여야 transcript 경로(enc-cwd)가 일치한다.
  */
-import { spawn } from "node:child_process";
+import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
 import type { ImageAttachment } from "@decku/shared";
+
+// 진행 중인 inject 프로세스 (세션별) — 웹의 '중단'으로 kill 하기 위함
+const running = new Map<string, ChildProcess>();
+const cancelled = new Set<string>();
+
+/** 진행 중인 그 세션의 inject를 중단. 성공 시 true. */
+export function cancelInject(sessionId: string): boolean {
+  const child = running.get(sessionId);
+  if (!child) return false;
+  cancelled.add(sessionId);
+  child.kill("SIGTERM");
+  return true;
+}
 
 /**
  * claude 로그인 여부 — `claude auth status` 로 **API 호출·세션 생성·토큰 소모 0** (로컬 자격증명만 읽음).
@@ -107,7 +120,7 @@ export function injectMessage(
   images?: ImageAttachment[],
 ): Promise<void> {
   if (!images || images.length === 0) {
-    return runClaude(cwd, ["-p", text, "--resume", sessionId, "--output-format", "json"]);
+    return runClaude(cwd, ["-p", text, "--resume", sessionId, "--output-format", "json"], undefined, sessionId);
   }
 
   // 이미지 → stream-json 입력 (Messages API content 블록)
@@ -123,6 +136,7 @@ export function injectMessage(
     // -p + stream-json 출력은 claude가 --verbose 를 요구함
     ["-p", "--resume", sessionId, "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"],
     line,
+    sessionId,
   );
 }
 
@@ -139,14 +153,15 @@ function isTransient(msg: string): boolean {
 }
 
 /** 일시적 실패는 짧은 백오프로 최대 2회 재시도(주입은 멱등하지 않지만, 인증/소켓 실패는 주입 전이라 안전). */
-async function runClaude(cwd: string, args: string[], stdin?: string, attempt = 0): Promise<void> {
+async function runClaude(cwd: string, args: string[], stdin?: string, sid?: string, attempt = 0): Promise<void> {
   try {
-    await spawnClaude(cwd, args, stdin);
+    await spawnClaude(cwd, args, stdin, sid);
   } catch (e) {
     const msg = (e as Error).message;
+    if (msg === "__cancelled__") throw e; // 사용자 중단 → 재시도 안 함
     if (attempt < 2 && isTransient(msg)) {
       await sleep(800 * (attempt + 1));
-      return runClaude(cwd, args, stdin, attempt + 1);
+      return runClaude(cwd, args, stdin, sid, attempt + 1);
     }
     throw e;
   }
@@ -154,7 +169,7 @@ async function runClaude(cwd: string, args: string[], stdin?: string, attempt = 
 
 const INJECT_TIMEOUT_MS = 2 * 60 * 1000; // 응답이 이 시간 넘게 안 끝나면 멈춘 것으로 보고 종료
 
-function spawnClaude(cwd: string, args: string[], stdin?: string): Promise<void> {
+function spawnClaude(cwd: string, args: string[], stdin?: string, sid?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("claude", args, {
       cwd,
@@ -162,6 +177,7 @@ function spawnClaude(cwd: string, args: string[], stdin?: string): Promise<void>
       stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"],
       env: process.env,
     });
+    if (sid) running.set(sid, child); // 중단 가능하게 등록
     let out = "";
     let err = "";
     let timedOut = false;
@@ -173,10 +189,13 @@ function spawnClaude(cwd: string, args: string[], stdin?: string): Promise<void>
     child.stderr?.on("data", (d) => (err += String(d)));
     child.on("error", (e) => {
       clearTimeout(timer);
+      if (sid) running.delete(sid);
       reject(e);
     });
     child.on("close", (code) => {
       clearTimeout(timer);
+      if (sid) running.delete(sid);
+      if (sid && cancelled.delete(sid)) return reject(new Error("__cancelled__")); // 사용자 중단
       if (timedOut) {
         return reject(
           new Error(`응답 시간 초과(>${INJECT_TIMEOUT_MS / 60000}분). 현재 작업 중인 바로 그 세션이면 충돌할 수 있어요 — 다른 세션으로 시도해 보세요.`),

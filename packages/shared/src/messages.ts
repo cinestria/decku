@@ -110,5 +110,7 @@ export const CmdPayloadSchema = z.discriminatedUnion("op", [
   z.object({ op: z.literal("history"), limit: z.number().optional() }),
   // 새 세션 시작 (cwd에서 첫 메시지로 claude -p 새 세션 생성)
   z.object({ op: z.literal("new"), cwd: z.string(), text: z.string() }),
+  // 진행 중인 응답 중단
+  z.object({ op: z.literal("stop"), sessionId: z.string() }),
 ]);
 export type CmdPayload = z.infer<typeof CmdPayloadSchema>;

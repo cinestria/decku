@@ -73,6 +73,11 @@ export class DeckuClient {
     await this.sendCmd({ op: "new", cwd, text });
   }
 
+  /** 진행 중인 응답 중단. */
+  async stopResponse(sessionId: string): Promise<void> {
+    await this.sendCmd({ op: "stop", sessionId });
+  }
+
   /** 세션 열기: 그 tx 채널 구독 + 백필 요청. onTx로 복호된 페이로드 전달. */
   async openSession(sid: string, onTx: (payload: TxPayload) => void): Promise<void> {
     if (this.txCh) {

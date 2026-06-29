@@ -15,7 +15,7 @@ import { loadConfig, saveConfig, type BridgeConfig } from "../lib/config.js";
 import { createPairing, printPairing, pairUrl } from "./pair.js";
 import { ReplayGuard } from "../lib/replay.js";
 import { BridgeRealtime } from "../lib/realtime.js";
-import { injectMessage, createSession, claudeLoggedIn, claudeSetupToken, isAuthError } from "../lib/inject.js";
+import { injectMessage, createSession, cancelInject, claudeLoggedIn, claudeSetupToken, isAuthError } from "../lib/inject.js";
 import { TitleCache } from "../lib/titles.js";
 import { historyList, findTranscript } from "../lib/history.js";
 
@@ -216,6 +216,10 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
         .then(() => console.log(`${DIM}  inject 완료 ${shortId(cmd.sessionId)} (${((Date.now() - t0) / 1000).toFixed(1)}s)${RESET}`))
         .catch((e) => {
           const msg = (e as Error).message;
+          if (msg === "__cancelled__") {
+            console.log(`${DIM}  중단됨 ${shortId(cmd.sessionId)}${RESET}`);
+            return; // 사용자 중단 → 실패 알림 안 함
+          }
           console.error(`inject 실패 ${shortId(cmd.sessionId)}:`, msg);
           if (isAuthError(msg)) void handleAuthFailure(cfg); // 토큰 무효 → 삭제+재로그인
           // 웹에도 알림 (대화에 일시적 경고 — jsonl엔 없어 새로고침 시 사라짐)
@@ -231,6 +235,9 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
       const items = await historyList(cmd.limit ?? 40);
       await rt.publishHistory({ type: "history", items });
       console.log(`${DIM}↑ history: ${items.length}${RESET}`);
+    } else if (cmd.op === "stop") {
+      const ok = cancelInject(cmd.sessionId);
+      console.log(`${DIM}↯ stop ${shortId(cmd.sessionId)}: ${ok ? "중단함" : "진행 중인 게 없음"}${RESET}`);
     } else if (cmd.op === "new") {
       console.log(`${DIM}↓ new (${cmd.cwd}): "${cmd.text.slice(0, 40)}" (생성 중…)${RESET}`);
       const res = await createSession(cmd.cwd, cmd.text);
