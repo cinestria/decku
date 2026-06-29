@@ -2,7 +2,9 @@
 
 > 토대 설계: [claude-desktop-webapp-design.md](claude-desktop-webapp-design.md)
 > 결정: **처음부터 멀티테넌트**, realtime/auth/DB 벤더는 **Supabase**.
-> 작성일 2026-06-28.
+> 작성일 2026-06-28. 갱신 2026-06-29.
+>
+> **상태: 라이브.** 웹 [decku.app](https://decku.app)(Vercel) · CLI [`@decku/cli`](https://www.npmjs.com/package/@decku/cli) **0.1.6**(npm) · repo **public**. M0–M5 + 보안 강화(M5.5) 완료.
 
 ## 0. 한 줄 요약
 
@@ -43,7 +45,7 @@ decku/
 - 브릿지가 transcript/세션 페이로드(본문·cwd·세션제목 포함)를 **유저 전용 키로 암호화** → Supabase는 ciphertext만 중계. 우리 서버·Supabase 모두 평문을 받지 않음.
 - 암호: 페이로드는 대칭키(AES-GCM, libsodium/WebCrypto)로 암호화. 유저별 **마스터 시크릿**에서 파생.
 - **키 교환은 페어링에 얹는다** (4-A 참조). 마스터 시크릿은 서버로 절대 전송 안 함.
-- **남는 신뢰 = 클라이언트 정직성**(브릿지·브라우저가 키를 안 빼돌리는가). → 오픈소스 대신 **후순위 서드파티 보안 감사**로 보강 (M6).
+- **남는 신뢰 = 클라이언트 정직성**(브릿지·브라우저가 키를 안 빼돌리는가). → repo **public**([cinestria/decku](https://github.com/cinestria/decku))이라 코드 검증 가능. 추가로 서드파티 감사는 후순위(M6).
 - 한계: 메타데이터(채널명=userId, 타이밍, 메시지 크기)는 암호화 안 됨. 민감 본문은 전부 페이로드에 넣어 암호화로 가린다.
 
 ## 1-B. 브릿지 배포 (npm/npx 1순위)
@@ -51,10 +53,11 @@ decku/
 언어는 **Node/TS 확정** — 전송이 Claude Agent SDK(JS 생태계)이고, `claude` CLI(Claude Desktop이 설치)가 어차피 로컬에 필요하므로 Node 의존은 추가 부담이 아님.
 
 - **1순위: npm 패키지 `@decku/cli` + `npx`.** 한 코드베이스로 Mac/Win/Linux, 설치 없이 최신 실행, `npm publish` 한 줄. brew/scoop/winget은 이걸 감싸는 얇은 래퍼(M5).
-- **CLI는 서브커맨드 구조**로 설계:
-  - `pair <code>` — 페어링 코드 제출 → device token 수령·로컬 저장
-  - `run` — watch + realtime 데몬 (기본)
-  - `install` / `uninstall` — OS별 autostart 등록 (launchd / Task Scheduler / systemd user)
+- **CLI는 서브커맨드 구조** (현재):
+  - `decku` (서브커맨드 없음) — 필요 시 자동 페어링(QR) → watch + realtime 중계. **이것만으로 시작.**
+  - `run` — 위와 동일(명시적). `--console` 로컬 전용, `--from-start` 전체 백필.
+  - `pair` — 재페어링/QR 다시 보기. `--new` 새 namespace, `--expire-days N` 만료(opt-in), `--url` 웹주소.
+  - `install` / `uninstall` — OS별 autostart 등록 (macOS launchd 구현; Win/Linux는 후순위).
 - 후순위(M6+, 수요 확인 후): Node 없는 유저용 단일 바이너리(bun/SEA, 서명·공증) 또는 Tauri 트레이 앱(같은 Node 브릿지를 sidecar로 재사용).
 
 ## 2. 채널 / 격리 설계
@@ -70,7 +73,7 @@ tenant:<userId>:cmd             브라우저 → 브릿지  (채팅 전송)
 
 ## 3. 데이터 모델 (Supabase)
 
-**초기(QR 페어링): DB 거의 0.** namespace+pairingJWT는 stateless 서명 토큰이라 테이블 불필요. transcript·세션목록·E2EE키는 어디에도 저장 안 함(realtime + 로컬 파일 + QR이 source of truth).
+**QR 페어링: DB 0.** 기본 흐름은 namespace만으로 stateless(테이블 불필요). 선택적 만료(`--expire-days`)는 **서명된 페어링 토큰**(`purpose=decku-pairing`, exp 포함, HS256)으로 stateless하게 강제 — 역시 DB 없이 동작(서버가 서명·검증만). transcript·세션목록·E2EE키는 어디에도 저장 안 함(realtime + 로컬 파일 + QR이 source of truth). `namespaces` 테이블은 미래의 서버측 revoke용으로 스키마에만 존재(현재 미사용).
 
 **스키마는 Drizzle(`@decku/db`)로 관리** — `apps/db/src/schema.ts` 수정 → `pnpm db:generate` → `pnpm db:migrate`. (Realtime RLS는 우리 테이블이 아니라 별도 raw SQL.)
 
@@ -87,18 +90,20 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 
 ### 4-A. QR 페어링 (로그인 없이 격리 + E2EE)
 ```
-[브릿지] 첫 실행 (decku pair)
-  → POST /api/pair  → { namespace(랜덤), pairingJWT(단명, namespace 서명) } 수령
+[브릿지] 첫 실행 (decku — 서브커맨드 없이)
+  → 저장된 페어링 없으면 자동으로: POST /api/pair → { namespace(랜덤), [pairingToken] } 수령
+       · 기본: namespace만 (무제한)
+       · --expire-days N: pairingToken(exp=N일, purpose=decku-pairing) 추가
   → e2eeKey(32B) 로컬 생성 — 서버에 절대 안 보냄
-  → 로컬 저장(~/.decku/) + QR 표시 { namespace, pairingJWT, e2eeKey }  (또는 deep-link URL)
+  → ~/.decku/config.json 저장 + QR(#ns=&k=[&t=pairingToken]) → 그대로 watch+중계 시작
 [브라우저] QR 스캔 / URL 열기
-  → e2eeKey 를 로컬(IndexedDB)에 저장
-  → pairingJWT 로 POST /api/realtime-token → tenant:<namespace>:* scoped 토큰
-[브릿지] 이후: pairingJWT(또는 device token) 으로 같은 엔드포인트에서 realtime 토큰 갱신
+  → e2eeKey(k)·[pairingToken(t)] 를 localStorage에 저장 (hash는 지움)
+  → POST /api/realtime-token { namespace | pairingToken } → tenant:<namespace>:* scoped 토큰(1h)
+[양끝] 이후 같은 엔드포인트에서 realtime 토큰 1h마다 갱신
 ```
-- **테넌트 = 랜덤 namespace.** 계정 없이 격리: namespace는 추측 불가 + 토큰이 그 namespace만 허용 → 목표 3 충족.
-- **E2EE 키는 QR에만** — 서버·Supabase 모두 본문 못 봄(§1-A와 합쳐짐).
-- **시크릿이 곧 자격증명** — QR 새면 그 namespace 노출. 초기엔 서버측 revoke 없음(트레이드오프). 폐기·다기기는 M6 로그인에서.
+- **테넌트 = 랜덤 namespace(144bit).** 계정 없이 격리: namespace 추측 불가 + 토큰이 그 namespace만 허용.
+- **E2EE 키는 QR `#fragment`에만** — 서버·Supabase 모두 본문 못 봄(§1-A).
+- **시크릿이 곧 자격증명** — QR 새면 그 namespace 노출. 만료 토큰(`--expire-days`)으로 노출 창을 시간 제한 가능(기본 무제한 — 상시 실행이 안 끊기게). 서버측 즉시 revoke·다기기는 M6.
 
 ### 4-B. 토큰 발급 (서버리스, DB 거의 0)
 - Supabase Realtime은 **자체 서명 JWT**(namespace를 claim으로, Supabase JWT secret으로 서명)로 Authorization → **Supabase Auth 안 거침**.
@@ -156,24 +161,32 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 - ✅ resume 주입 실측: 같은 transcript에 append + **맥락 유지**(10→18줄, PONG 회상), 같은 sessionId.
 - 참고: `-p` 세션은 registry 미등록 → decku 목록엔 Desktop/interactive 세션만. 브라우저 실시간 데모는 실세션에서(주입은 사용자 선택).
 
-### M5 — 배포 준비 ✅ 완료 (최종 publish/deploy는 사용자 계정 단계)
-- 브릿지 **tsup 번들**(shared 인라인) → `dist/cli.js`(shebang), `npx @decku/cli` 단독 동작 확인. bin/files/publishConfig 정리.
-- `install`/`uninstall`: macOS **launchd** autostart.
-- 루트/브릿지/웹 **README**(Vercel 배포·npx·Supabase 셋업) + 보안 체크리스트 점검.
-- ⏭ 사용자 단계: Vercel 배포(env 3개) + `npm publish`(npm 로그인). 그 후 프로덕션 URL로 페어링하면 전 흐름 동작.
+### M5 — 배포 ✅ 완료 (라이브)
+- 브릿지 **tsup 번들**(shared 인라인) → `dist/cli.js`(shebang). `@decku/cli` **npm publish 완료**(public, 0.1.6).
+- 웹 **Vercel 배포 + 커스텀 도메인 [decku.app](https://decku.app)**(GitHub push→자동배포). 다크모드·채팅버블·history·이미지·카메라 페어링·PWA·pull-to-refresh, 랜딩+`/docs`+`/faq`.
+- `decku` **서브커맨드 없이 한 줄** = 필요 시 자동 페어링 후 watch+중계. `install`/`uninstall`: macOS **launchd**.
+- 루트/브릿지/웹 README + 보안 체크리스트.
+
+### M5.5 — 보안 강화 ✅ 완료 (0.1.5–0.1.6)
+- **cmd anti-replay**: `send`에 `ts`·`nonce`를 E2EE 봉투 *안*에 넣어(위조 불가) 브릿지 `ReplayGuard`(120s 윈도우+nonce 중복)가 캡처 재전송 거부. ts/nonce 없는 send도 거부. ✅ 유닛 5/5.
+- **구독자-게이트 heartbeat**: 보는 브라우저 있을 때만 publish → idle 시 Supabase 메시지/월 급감(상시 브릿지 1대 4s heartbeat ≈ 65만/월 → 0). **Supabase presence**(브라우저 `track()`) + **`watch` cmd keepalive(30s)** 폴백 이중화. run.ts `watching()`/`WATCH_TTL_MS=35s`.
+- **페어링 만료(opt-in)**: `decku pair --new --expire-days N` → 서버가 `purpose=decku-pairing`+exp 서명 토큰 발급, `/api/realtime-token`이 만료 검사 후에만 realtime 토큰 발급. QR `#t=`로 폰에도 전달. **기본 무제한**(launchd 상시 실행이 조용히 끊기는 실패모드 방지). ✅ 유닛 4/4(정상/만료/위조/교차사용 차단).
+- 운영 메모: stale 형식 pairingToken은 `loadConfig`가 자동 제거. `decku -v/--version` 추가.
+- ⏳ 남음: #1 인프라 무단사용 = **Supabase 동시연결/메시지 쿼터 + Vercel rate limit/WAF**(코드 아닌 설정). prod RLS(0001) 적용 점검.
 
 ### M6 — 보강 (후순위)
-- **Google/Apple 로그인 추가**(영속 계정·다기기·기기 폐기). Apple은 $99 결제 후. E2EE **서드파티 보안 감사**. 프라이버시 정책 게시.
+- **Google/Apple 로그인 추가**(영속 계정·다기기·**서버측 즉시 기기 폐기**). Apple은 $99 결제 후. E2EE **서드파티 보안 감사**. 프라이버시 정책 게시.
 
 ## 7. 보안 체크리스트 (출시 게이트)
 
-- [ ] Realtime secret/service key는 **서버·브릿지 env에만**, 브라우저엔 단명 scoped JWT만.
-- [ ] 토큰 capability `tenant:<namespace>:*` 로 엄격 제한 — RLS로 강제, 음성 테스트(남의 채널 구독 시도→거부) 포함.
-- [ ] namespace는 추측 불가한 길이의 랜덤, pairingJWT 단명. QR 시크릿은 안전 채널로만 전달(노출=namespace 노출). (서버측 폐기·다기기는 M6 로그인.)
-- [ ] 전송(쓰기)은 본인 테넌트만. (공유 읽기는 추후 read-only scoped 토큰.)
-- [ ] backfill 청크 분할로 메시지 크기 한도 안 넘김.
-- [ ] enc-cwd 치환·죽은 pid 거르기 회귀 테스트.
-- [ ] **E2EE: e2eeKey가 서버로 절대 전송 안 됨(QR에만, 네트워크 로그로 확인). Supabase 측 페이로드가 ciphertext.**
+- [x] Realtime secret(`SUPABASE_JWT_SECRET`)는 **웹 서버 env에만**, 브라우저/브릿지엔 단명 scoped JWT만. service_role 미사용.
+- [x] 토큰 capability `tenant:<namespace>:*` 로 엄격 제한 — RLS로 강제, 음성 테스트(남의 채널 구독 시도→거부) 실측.
+- [x] namespace 추측 불가 144bit 랜덤, realtime JWT 1h. QR 시크릿은 본인 기기로만. 만료는 `--expire-days`(opt-in). (서버측 즉시 폐기·다기기는 M6.)
+- [x] 전송(쓰기)은 본인 테넌트만(RLS insert). + **anti-replay**(ts·nonce)로 캡처 재전송 거부.
+- [x] backfill 청크 분할(40/chunk)로 메시지 크기 한도 안 넘김.
+- [x] enc-cwd 치환·죽은 pid 거르기 회귀 테스트.
+- [x] **E2EE: e2eeKey는 QR `#fragment`에만, 서버 미전송(실측). Supabase 측 페이로드는 ciphertext.**
+- [ ] **인프라 무단사용 방지**: `/api/pair`·`/api/realtime-token` rate limit + Supabase 동시연결/메시지 쿼터(설정). prod RLS(0001) 적용 점검.
 
 ## 8. 리스크 / 미해결
 
@@ -181,9 +194,12 @@ namespaces : id(=namespace) PK, created_at, revoked, label   -- 선택적 revoke
 2. **Supabase Realtime Authorization** — private 채널 RLS는 비교적 신기능. M2에서 격리 음성 테스트를 반드시 먼저.
 3. **메시지 크기/속도 한도** — 무료 tier 한도 내 청크/스로틀. M5 부하 테스트.
 4. **브릿지 배포 UX** — 비개발 유저가 로컬 데몬 띄우기. 초기엔 `npx @decku/cli` + 페어링 코드 안내로.
-5. **E2EE 잔여신뢰** — 오픈소스 안 함 → 클라이언트가 키를 안 빼돌린다는 보장은 코드 비공개 상태. M6 서드파티 감사로 보강. 키 분실 = 복호 불가(설계상 복구 불가, 의도된 것).
+5. **E2EE 잔여신뢰** — repo public이라 클라이언트 코드 검증 가능(키 안 빼돌리는지). 추가 보강은 M6 서드파티 감사. 키 분실 = 복호 불가(설계상 복구 불가, 의도된 것).
 6. **Apple 비용/로테이션** — $99/yr + client_secret 6개월 만료. M6에서 결제 후, Supabase 자동 갱신 설정.
 
-## 9. 다음 행동
+## 9. 다음 행동 (라이브 이후)
 
-M0부터 시작 권장. 승인하면 모노레포 스캐폴딩 + `packages/shared`(채널명·enc-cwd·jsonl 파서 + 테스트)부터 만든다.
+1. **인프라 무단사용 방지**(#1): Supabase 대시보드에서 Realtime 동시연결·메시지 레이트 쿼터 설정 + Vercel rate limit/WAF. (코드 아닌 설정 — 실질 방어선.)
+2. **prod RLS 적용 점검**: `supabase/migrations/0001_realtime_authorization.sql`이 프로덕션 DB에 적용돼 있는지 확인(핵심 격리 경계).
+3. **presence 실서버 검증**: 구독자-게이트 heartbeat의 presence 경로를 2-클라(브릿지+브라우저)로 실측(현재 watch-ping 폴백으로 안전망은 있음).
+4. M6: Google/Apple 로그인(영속 계정·다기기·서버측 폐기), 서드파티 감사, 프라이버시 정책.
