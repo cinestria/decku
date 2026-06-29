@@ -21,14 +21,33 @@ export const CONFIG_FILE = join(DECKU_DIR, "config.json");
 export async function loadConfig(): Promise<BridgeConfig | null> {
   try {
     const c = JSON.parse(await readFile(CONFIG_FILE, "utf8")) as BridgeConfig;
+    let changed = false;
     // 옛 기본 도메인 → 현재 도메인 마이그레이션 (같은 앱, namespace·키 유지).
     if (c.apiUrl === "https://decku.vercel.app") {
       c.apiUrl = "https://decku.app";
-      await saveConfig(c);
+      changed = true;
     }
+    // 옛 형식(scope:pair 등) pairingToken은 현재 게이트와 호환 안 됨 → 제거(무제한 fallback).
+    if (c.pairingToken && !isCurrentPairingToken(c.pairingToken)) {
+      delete c.pairingToken;
+      changed = true;
+    }
+    if (changed) await saveConfig(c);
     return c;
   } catch {
     return null;
+  }
+}
+
+/** pairingToken이 현재 형식(purpose=decku-pairing)인지 — 서명 검증 없이 payload만 확인. */
+function isCurrentPairingToken(token: string): boolean {
+  try {
+    const part = token.split(".")[1];
+    if (!part) return false;
+    const payload = JSON.parse(Buffer.from(part, "base64url").toString("utf8")) as { purpose?: string };
+    return payload.purpose === "decku-pairing";
+  } catch {
+    return false;
   }
 }
 

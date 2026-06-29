@@ -8,9 +8,19 @@
  *
  * npm 패키지 `@decku/cli` 로 배포, `npx @decku/cli <cmd>` 로 실행.
  */
+import { readFileSync } from "node:fs";
 import { run } from "./commands/run.js";
 import { pair } from "./commands/pair.js";
 import { install, uninstall } from "./commands/install.js";
+
+// 번들된 dist/cli.js 기준 ../package.json (런타임 읽기 → esbuild가 번들 안 함)
+const VERSION = (() => {
+  try {
+    return (JSON.parse(readFileSync(new URL("../package.json", import.meta.url), "utf8")) as { version: string }).version;
+  } catch {
+    return "?";
+  }
+})();
 
 const USAGE = `decku — Claude Desktop 세션을 웹앱에 연결
 
@@ -29,6 +39,10 @@ async function main(): Promise<void> {
 
   if (first === "-h" || first === "--help" || first === "help") {
     process.stdout.write(USAGE);
+    return;
+  }
+  if (first === "-v" || first === "--version" || first === "version") {
+    process.stdout.write(`${VERSION}\n`);
     return;
   }
 
