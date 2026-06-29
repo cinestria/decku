@@ -106,20 +106,8 @@
       return;
     }
     pairing = p;
-    client = new DeckuClient(p);
     try {
-      await client.start({
-        onSessions: (items) => {
-          sessions = items;
-          lastSeen = Date.now();
-        },
-        onHistory: (items) => {
-          history = items;
-          historyLoading = false;
-        },
-      });
-      connected = true;
-      status = `namespace ${p.ns.slice(0, 8)}…`;
+      await startRealtime(p);
     } catch (e) {
       status = "연결 실패: " + (e as Error).message;
     }
@@ -127,10 +115,59 @@
     heartbeatTimer = setInterval(() => {
       online = lastSeen > 0 && Date.now() - lastSeen < 12000;
     }, 2000);
+
+    // 폰 화면 껐다 켜기/탭 복귀: 백그라운드에서 웹소켓이 끊겼다면 재연결
+    document.addEventListener("visibilitychange", onWake);
+    window.addEventListener("online", onWake);
+    window.addEventListener("pageshow", onWake);
   });
+
+  let reconnecting = false;
+
+  async function startRealtime(p: Pairing): Promise<void> {
+    client = new DeckuClient(p);
+    await client.start({
+      onSessions: (items) => {
+        sessions = items;
+        lastSeen = Date.now();
+      },
+      onHistory: (items) => {
+        history = items;
+        historyLoading = false;
+      },
+    });
+    connected = true;
+    status = `namespace ${p.ns.slice(0, 8)}…`;
+  }
+
+  /** 화면 복귀 시: 한 번이라도 연결됐었는데 heartbeat가 끊겼으면(=오프라인) 재연결. */
+  function onWake(): void {
+    if (typeof document !== "undefined" && document.visibilityState !== "visible") return;
+    const stale = lastSeen > 0 && Date.now() - lastSeen > 12000;
+    if (stale) void reconnect();
+  }
+
+  async function reconnect(): Promise<void> {
+    if (!pairing || reconnecting) return;
+    reconnecting = true;
+    try {
+      await client?.stop().catch(() => {});
+      await startRealtime(pairing);
+      if (selected) await loadSession(selected); // tx 채널 재구독 + 백필
+    } catch (e) {
+      status = "재연결 실패: " + (e as Error).message;
+    } finally {
+      reconnecting = false;
+    }
+  }
 
   onDestroy(() => {
     if (heartbeatTimer) clearInterval(heartbeatTimer);
+    if (typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", onWake);
+      window.removeEventListener("online", onWake);
+      window.removeEventListener("pageshow", onWake);
+    }
     stopScan();
     void client?.stop();
   });
