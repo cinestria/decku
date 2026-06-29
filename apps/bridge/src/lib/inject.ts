@@ -36,7 +36,30 @@ export function injectMessage(
   );
 }
 
-function runClaude(cwd: string, args: string[], stdin?: string): Promise<void> {
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
+
+/** 일시적(네트워크/과부하) 실패 — 재시도하면 풀릴 만한 것. */
+function isTransient(msg: string): boolean {
+  return /socket|closed unexpectedly|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|network|401|429|408|5\d\d|overloaded|timeout/i.test(
+    msg,
+  );
+}
+
+/** 일시적 실패는 짧은 백오프로 최대 2회 재시도(주입은 멱등하지 않지만, 인증/소켓 실패는 주입 전이라 안전). */
+async function runClaude(cwd: string, args: string[], stdin?: string, attempt = 0): Promise<void> {
+  try {
+    await spawnClaude(cwd, args, stdin);
+  } catch (e) {
+    const msg = (e as Error).message;
+    if (attempt < 2 && isTransient(msg)) {
+      await sleep(800 * (attempt + 1));
+      return runClaude(cwd, args, stdin, attempt + 1);
+    }
+    throw e;
+  }
+}
+
+function spawnClaude(cwd: string, args: string[], stdin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("claude", args, {
       cwd,

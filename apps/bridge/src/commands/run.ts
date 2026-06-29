@@ -146,7 +146,18 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
       // 한 턴(응답까지)이라 시간 소요 → fire-and-forget, append는 tail이 publish
       injectMessage(found.cwd, cmd.sessionId, cmd.text, cmd.images)
         .then(() => console.log(`${DIM}  inject 완료 ${shortId(cmd.sessionId)}${RESET}`))
-        .catch((e) => console.error(`inject 실패 ${shortId(cmd.sessionId)}:`, (e as Error).message));
+        .catch((e) => {
+          const msg = (e as Error).message;
+          console.error(`inject 실패 ${shortId(cmd.sessionId)}:`, msg);
+          // 웹에도 알림 (대화에 일시적 경고 — jsonl엔 없어 새로고침 시 사라짐)
+          void rt
+            .publishTx({
+              type: "tx",
+              sessionId: cmd.sessionId,
+              events: [{ kind: "message", role: "assistant", blocks: [{ type: "text", text: `⚠ 전송 실패: ${msg}` }] }],
+            })
+            .catch(() => {});
+        });
     } else if (cmd.op === "history") {
       const items = await historyList(cmd.limit ?? 40);
       await rt.publishHistory({ type: "history", items });
