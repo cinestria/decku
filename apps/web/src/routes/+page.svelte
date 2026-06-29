@@ -667,9 +667,7 @@ decku</code></pre>
               <button class="older-btn" onclick={loadOlder}>↑ 이전 대화 더보기</button>
             {/if}
             {#each events as ev, i (i)}
-              {#if ev.kind === "title"}
-                <div class="title">{ev.title}</div>
-              {:else}
+              {#if ev.kind === "message"}
                 {@const real = ev.blocks.filter((b) => b.type === "text" || b.type === "thinking" || b.type === "image")}
                 {@const tools = ev.blocks.filter((b) => b.type === "tool_use" || b.type === "tool_result")}
                 {#if real.length}
@@ -856,7 +854,7 @@ decku</code></pre>
 
   .convo { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
   .scroll-wrap { position: relative; flex: 1; min-height: 0; display: flex; }
-  .scroll { flex: 1; overflow-y: auto; padding: 1.25rem 1.5rem; overscroll-behavior-y: contain; scrollbar-width: none; }
+  .scroll { flex: 1; overflow-y: auto; padding: 0.85rem 0.9rem; overscroll-behavior-y: contain; scrollbar-width: none; }
   .scroll::-webkit-scrollbar { display: none; }
   .scrollbar { position: absolute; top: 6px; bottom: 6px; right: 2px; width: 14px; }
   .sb-thumb { position: absolute; right: 3px; width: 7px; border-radius: 4px; background: var(--muted); opacity: 0.4; cursor: grab; touch-action: none; }
@@ -870,14 +868,12 @@ decku</code></pre>
   .older-hint { text-align: center; margin: 0.3rem 0 0.8rem; font-size: 0.8rem; }
   .older-btn { display: block; margin: 0.2rem auto 0.9rem; padding: 0.35rem 0.9rem; border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: 999px; font-size: 0.8rem; cursor: pointer; }
   .older-btn:hover { background: var(--surface); color: var(--text); }
-  .title { text-align: center; font-weight: 700; color: var(--muted); font-size: 0.85rem; margin: 0.5rem 0 1.25rem; }
-  .title::before { content: "⭐ "; }
-
-  .msg { display: flex; margin: 0.5rem 0; }
+  /* iOS 메시지 버블: 17px 텍스트, 둥근 모서리 + 꼬리쪽만 살짝, 시스템 블루/그레이 */
+  .msg { display: flex; margin: 0.15rem 0; }
   .msg.user { justify-content: flex-end; }
-  .bubble { max-width: 78%; padding: 0.6rem 0.85rem; border-radius: 16px; line-height: 1.55; }
+  .bubble { max-width: 75%; padding: 0.45rem 0.75rem; border-radius: 18px; line-height: 1.35; font-size: 17px; letter-spacing: -0.01em; }
   .msg.user .bubble { background: var(--user-bubble); color: var(--user-text); border-bottom-right-radius: 5px; }
-  .msg.assistant .bubble { background: var(--asst-bubble); border-bottom-left-radius: 5px; max-width: 88%; }
+  .msg.assistant .bubble { background: var(--asst-bubble); border-bottom-left-radius: 5px; max-width: 82%; }
   .bubble p { margin: 0.2rem 0; white-space: pre-wrap; word-break: break-word; }
   .bubble p:first-child { margin-top: 0; }
   .bubble p:last-child { margin-bottom: 0; }

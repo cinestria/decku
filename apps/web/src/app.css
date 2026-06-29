@@ -7,9 +7,9 @@
   --muted: #8b929e;
   --accent: #4f6bed;
   --accent-weak: #eef1fe;
-  --user-bubble: #4f6bed;
+  --user-bubble: #007aff; /* iOS 시스템 블루 */
   --user-text: #ffffff;
-  --asst-bubble: #f2f4f8;
+  --asst-bubble: #e9e9eb; /* iOS 수신 버블 그레이 */
   --danger: #d93636;
 }
 @media (prefers-color-scheme: dark) {
@@ -22,9 +22,9 @@
     --muted: #8b929e;
     --accent: #6d86ff;
     --accent-weak: #1b2236;
-    --user-bubble: #3f5bdb;
+    --user-bubble: #0a84ff; /* iOS 다크 블루 */
     --user-text: #ffffff;
-    --asst-bubble: #1d212b;
+    --asst-bubble: #262629; /* iOS 다크 수신 버블 */
     --danger: #ff6b6b;
   }
 }
