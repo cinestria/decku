@@ -36,10 +36,10 @@ export function checkClaudeAuth(): Promise<{ ok: boolean; detail?: string }> {
   });
 }
 
-/** `claude login` 대화형 실행 (TTY에서만). 성공 여부 반환. */
-export function claudeLogin(): Promise<boolean> {
+/** `claude setup-token` 대화형 실행 (TTY에서만) — 헤드리스용 장기 인증 토큰을 OAuth로 발급. */
+export function claudeSetupToken(): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn("claude", ["login"], { stdio: "inherit", env: process.env });
+    const child = spawn("claude", ["setup-token"], { stdio: "inherit", env: process.env });
     child.on("error", () => resolve(false));
     child.on("close", (code) => resolve(code === 0));
   });

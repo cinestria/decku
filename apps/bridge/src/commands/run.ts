@@ -15,7 +15,7 @@ import { loadConfig } from "../lib/config.js";
 import { createPairing, printPairing, pairUrl } from "./pair.js";
 import { ReplayGuard } from "../lib/replay.js";
 import { BridgeRealtime } from "../lib/realtime.js";
-import { injectMessage, checkClaudeAuth, claudeLogin } from "../lib/inject.js";
+import { injectMessage, checkClaudeAuth, claudeSetupToken } from "../lib/inject.js";
 import { TitleCache } from "../lib/titles.js";
 import { historyList, findTranscript } from "../lib/history.js";
 
@@ -64,8 +64,8 @@ async function ensureClaudeAuth(): Promise<void> {
   console.log(`\n${BOLD}⚠ claude 인증이 필요합니다${RESET} ${DIM}(${auth.detail})${RESET}`);
 
   if (process.stdin.isTTY) {
-    console.log(`${DIM}로그인을 진행합니다 — 브라우저에서 완료하세요…${RESET}\n`);
-    await claudeLogin();
+    console.log(`${DIM}'claude setup-token' 으로 로그인합니다 — 브라우저에서 완료하세요…${RESET}\n`);
+    await claudeSetupToken();
     auth = await checkClaudeAuth();
     if (auth.ok) {
       console.log(`${DIM}✓ 인증 완료 — 메시지 전송 가능${RESET}\n`);
@@ -75,7 +75,7 @@ async function ensureClaudeAuth(): Promise<void> {
   // 비TTY(launchd 등)이거나 로그인 후에도 실패 → 읽기는 되니 계속 진행, 안내만
   console.log(
     `${BOLD}⚠ 인증 안 됨 — 읽기·목록은 되지만 메시지 전송은 안 됩니다.${RESET}\n` +
-      `${DIM}   터미널에서  ${RESET}${BOLD}claude login${RESET}${DIM}  또는  ${RESET}${BOLD}export ANTHROPIC_API_KEY=sk-ant-...${RESET}${DIM}  후 decku 재시작.${RESET}\n`,
+      `${DIM}   터미널에서  ${RESET}${BOLD}claude setup-token${RESET}${DIM} (또는 claude 안에서 ${RESET}${BOLD}/login${RESET}${DIM}) 후 decku 재시작.${RESET}\n`,
   );
 }
 
