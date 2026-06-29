@@ -336,6 +336,8 @@
     <span class="status">{status}</span>
   {/if}
   <span class="spacer"></span>
+  <a class="ghost nav" href="/docs">Doc</a>
+  <a class="ghost nav" href="/faq">FAQ</a>
   {#if !standalone && (installPrompt || isIos)}
     <button class="ghost" onclick={installApp}>📲 설치</button>
   {/if}
@@ -426,7 +428,7 @@ decku pair</code></pre>
       </div>
     </section>
 
-    <footer class="lfoot"><a href="/faq">자주 묻는 질문</a> · © decku · 무료</footer>
+    <footer class="lfoot">© decku · 무료</footer>
   </main>
 {:else}
   <div class="layout" class:has-sel={selected}>
@@ -552,6 +554,7 @@ decku pair</code></pre>
   button { font-family: inherit; }
   .ghost { font-size: 0.8rem; padding: 0.35rem 0.7rem; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; cursor: pointer; }
   .ghost:hover { background: var(--surface); }
+  a.nav { text-decoration: none; display: inline-flex; align-items: center; font-weight: 500; }
   .primary { padding: 0.7rem 1.4rem; border-radius: 10px; border: 0; background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
   .primary:hover { filter: brightness(1.05); }
 
