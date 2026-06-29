@@ -60,15 +60,15 @@ pnpm db:migrate                          # namespaces 테이블
 ### 웹 → Vercel
 1. Vercel에 repo 연결, **Root Directory = `apps/web`** (pnpm workspace 자동 감지).
 2. 환경변수 3개(`SUPABASE_JWT_SECRET`, `PUBLIC_SUPABASE_URL`, `PUBLIC_SUPABASE_ANON_KEY`) 등록.
-3. 커스텀 도메인(`decku.app`) 연결 후 페어링: `decku pair` (기본 URL = `https://decku.app`).
+3. 커스텀 도메인(`decku.app`) 연결됨. 사용자는 `decku` 한 줄로 시작(기본 URL = `https://decku.app`).
 
 ### 브릿지 → npm / npx
 ```bash
 pnpm --filter @decku/cli build        # tsup 번들 → dist/cli.js
 cd apps/bridge && npm publish            # (npm 로그인 후)
 ```
-사용자: `npx @decku/cli pair --url <webUrl>` → `npx @decku/cli run`.
-부팅 자동시작(macOS): 전역 설치 후 `decku install`(launchd). Windows=작업 스케줄러, Linux=systemd user에 `decku run` 등록.
+사용자: `npx @decku/cli` 한 줄 (처음엔 자동 페어링 → QR → watch+중계).
+부팅 자동시작(macOS): 전역 설치 후 `decku` 한 번 실행해 페어링 → `decku install`(launchd). Windows=작업 스케줄러, Linux=systemd user에 `decku run` 등록.
 
 ## 보안 체크리스트
 

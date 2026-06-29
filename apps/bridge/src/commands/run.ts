@@ -12,6 +12,7 @@ import { scanSessions, liveSessions, transcriptPath } from "../lib/sessions.js";
 import { TranscriptTail } from "../lib/tail.js";
 import { renderEvent } from "../lib/render.js";
 import { loadConfig } from "../lib/config.js";
+import { createPairing, printPairing } from "./pair.js";
 import { BridgeRealtime } from "../lib/realtime.js";
 import { injectMessage } from "../lib/inject.js";
 import { TitleCache } from "../lib/titles.js";
@@ -38,12 +39,15 @@ function toListItem(s: SessionFile): SessionListItem {
 }
 
 export async function run(argv: string[] = []): Promise<void> {
-  const cfg = argv.includes("--console") ? null : await loadConfig();
+  if (argv.includes("--console")) return runConsole(argv);
+
+  let cfg = await loadConfig();
   if (!cfg) {
-    if (!argv.includes("--console")) {
-      console.log(`${DIM}(페어링 안 됨 → 콘솔 모드. 웹 연동은 'decku pair' 후)${RESET}`);
-    }
-    return runConsole(argv);
+    // 첫 실행: 자동으로 페어링한 뒤 그대로 watch+중계로 이어간다 (명령 한 번).
+    console.log(`${BOLD}decku${RESET} 첫 실행 — 페어링을 만듭니다.`);
+    cfg = await createPairing(argv);
+    printPairing(cfg);
+    console.log(`${DIM}위 QR/URL을 폰·브라우저에서 한 번 열면 연결됩니다. 그대로 watching…${RESET}`);
   }
   return runRealtime(cfg, argv);
 }

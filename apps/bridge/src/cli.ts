@@ -15,16 +15,28 @@ import { install, uninstall } from "./commands/install.js";
 const USAGE = `decku — Claude Desktop 세션을 웹앱에 연결
 
 사용법:
-  decku pair --url <webUrl>   웹앱과 페어링 (QR/URL 출력)
-  decku run                   세션 watch + realtime (기본)
+  decku                       페어링(필요 시 자동) + 세션 watch + 중계 — 이것만으로 시작
+  decku run                   위와 동일 (명시적). --console 로 로컬 전용 모드
+  decku pair                  재페어링/QR 다시 보기 (--new 새 namespace, --url 웹주소)
   decku install               부팅 시 자동 시작 등록 (macOS)
   decku uninstall             자동 시작 해제
 `;
 
 async function main(): Promise<void> {
-  const [cmd, ...rest] = process.argv.slice(2);
+  const args = process.argv.slice(2);
+  const first = args[0];
 
-  switch (cmd ?? "run") {
+  if (first === "-h" || first === "--help" || first === "help") {
+    process.stdout.write(USAGE);
+    return;
+  }
+
+  // 서브커맨드가 없거나 첫 토큰이 플래그면 → run (예: `decku`, `decku --url x`, `decku --console`)
+  const hasSub = first !== undefined && !first.startsWith("-");
+  const cmd = hasSub ? first : "run";
+  const rest = hasSub ? args.slice(1) : args;
+
+  switch (cmd) {
     case "run":
       await run(rest);
       break;
@@ -36,11 +48,6 @@ async function main(): Promise<void> {
       break;
     case "uninstall":
       await uninstall();
-      break;
-    case "-h":
-    case "--help":
-    case "help":
-      process.stdout.write(USAGE);
       break;
     default:
       process.stderr.write(`알 수 없는 명령: ${cmd}\n\n${USAGE}`);

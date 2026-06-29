@@ -33,7 +33,7 @@ export async function install(): Promise<void> {
   if (notMac()) return;
 
   if (!(await loadConfig())) {
-    console.error("페어링이 먼저 필요합니다: decku pair --url <webUrl>");
+    console.error("페어링이 먼저 필요합니다. 'decku' 를 한 번 실행해 QR을 스캔한 뒤 다시 시도하세요.");
     process.exitCode = 1;
     return;
   }

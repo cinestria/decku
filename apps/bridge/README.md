@@ -5,20 +5,17 @@
 ## 사용
 
 ```bash
-# 1) 페어링 → QR/URL 출력 (기본 https://decku.app)
-npx @decku/cli pair
-
-# 2) 실행 (세션 watch + realtime)
-npx @decku/cli run
+# 한 줄이면 끝 — 처음엔 자동 페어링(QR 출력) 후 watch + realtime
+npx @decku/cli
 ```
-출력된 QR/URL을 브라우저에서 열면 세션 목록·대화가 뜬다.
+출력된 QR/URL을 브라우저에서 열면 세션 목록·대화가 뜬다. 이후엔 페어링이 저장돼 `decku` 만으로 재연결.
 
 ### 자동 시작 (macOS)
 ```bash
 npm i -g @decku/cli
-decku pair --url <webUrl>
-decku install      # launchd 등록 (로그인 시 자동 실행)
-decku uninstall    # 해제
+decku               # 한 번 실행해 페어링(QR 스캔)
+decku install       # launchd 등록 (로그인 시 자동 실행)
+decku uninstall     # 해제
 ```
 로그: `~/.decku/bridge.log`. Windows=작업 스케줄러, Linux=systemd user에 `decku run`을 등록.
 

@@ -2,7 +2,7 @@
   const faqs: { q: string; a: string }[] = [
     {
       q: "decku가 뭔가요?",
-      a: "Mac에서 돌아가는 Claude 세션을 폰·브라우저에서 실시간으로 보고, 그 자리에서 이어 대화하는 도구예요. Mac에 작은 브릿지(<code>decku run</code>)를 띄우고, QR로 한 번 페어링하면 끝입니다.",
+      a: "Mac에서 돌아가는 Claude 세션을 폰·브라우저에서 실시간으로 보고, 그 자리에서 이어 대화하는 도구예요. Mac에 작은 브릿지(<code>decku</code>)를 띄우고, QR로 한 번 페어링하면 끝입니다.",
     },
     {
       q: "안전한가요? 내 대화가 서버에 저장되나요?",
@@ -14,7 +14,7 @@
     },
     {
       q: "설치가 꼭 필요한가요?",
-      a: "아니요. Node만 있으면 설치 없이 <code>npx @decku/cli pair</code> 로 바로 됩니다. 자주 쓴다면 <code>npm i -g @decku/cli</code> 로 전역 설치하면 <code>decku</code> 명령을 쓸 수 있어요.",
+      a: "아니요. Node만 있으면 설치 없이 <code>npx @decku/cli</code> 로 바로 됩니다 — 처음 실행하면 자동으로 페어링 QR이 떠요. 자주 쓴다면 <code>npm i -g @decku/cli</code> 로 전역 설치하면 <code>decku</code> 한 줄로 실행할 수 있어요.",
     },
     {
       q: "비용이 드나요?",
@@ -22,7 +22,7 @@
     },
     {
       q: "세션 목록이 안 떠요 / '오프라인'으로 나와요.",
-      a: "Mac에서 브릿지(<code>decku run</code>)가 떠 있는지 먼저 확인하세요. 그리고 그 Mac에 <code>claude</code> CLI와 실제 Claude 세션이 있어야 목록에 나옵니다. 브릿지는 그 머신의 세션을 읽어 중계하는 구조라, 세션이 없으면 목록도 비어 있어요.",
+      a: "Mac에서 브릿지(<code>decku</code>)가 떠 있는지 먼저 확인하세요. 그리고 그 Mac에 <code>claude</code> CLI와 실제 Claude 세션이 있어야 목록에 나옵니다. 브릿지는 그 머신의 세션을 읽어 중계하는 구조라, 세션이 없으면 목록도 비어 있어요.",
     },
     {
       q: "npm i -g 할 때 EEXIST(file already exists) 오류가 나요.",

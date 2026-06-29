@@ -26,9 +26,9 @@
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
   let origin = $state("https://decku.app"); // 설치 안내 URL (SSR 폴백)
-  // decku.app(기본 도메인)이면 --url 생략, 아니면 명시
+  // decku.app(기본 도메인)이면 --url 생략, 아니면 명시. 서브커맨드 없이 실행 → 필요 시 자동 페어링 후 중계
   let pairCmd = $derived(
-    origin === "https://decku.app" ? "npx @decku/cli pair" : `npx @decku/cli pair --url ${origin}`,
+    origin === "https://decku.app" ? "npx @decku/cli" : `npx @decku/cli --url ${origin}`,
   );
 
   // 카메라 스캐너 (페어링)
@@ -427,7 +427,7 @@
           <pre class="cmd"><code>{pairCmd}</code></pre>
           <p class="muted small">자주 쓴다면 전역 설치 후 <code>decku</code> 명령으로:</p>
           <pre class="cmd"><code>npm i -g @decku/cli
-decku pair</code></pre>
+decku</code></pre>
         </div>
       </div>
 
