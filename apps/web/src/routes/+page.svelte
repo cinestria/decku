@@ -21,6 +21,8 @@
   type UiEvent = RenderEvent & { _id?: string; _pending?: boolean; _failed?: boolean };
   let events = $state<UiEvent[]>([]);
   let loading = $state(false);
+  let thinking = $state(false); // 보낸 뒤 응답(assistant) 도착 전까지 "생각 중…"
+  let thinkTimer: ReturnType<typeof setTimeout> | null = null;
   let draft = $state("");
   let pendingImages = $state<{ att: ImageAttachment; url: string }[]>([]);
   let client: DeckuClient | null = null;
@@ -184,6 +186,7 @@
     selected = sid;
     events = [];
     loading = true;
+    setThinking(false);
     stick = true; // 열면 최신(바닥)으로
     oldestIndex = 0;
     hasMore = false;
@@ -256,6 +259,7 @@
 
   $effect(() => {
     void events.length; // 의존성
+    void thinking; // '생각 중' 표시도 바닥으로 스크롤
     if (!scrollEl) return;
     void tick().then(() => {
       if (!scrollEl) return;
@@ -404,24 +408,33 @@
     for (const ev of incoming) {
       if (ev.kind === "message" && ev.role === "user") {
         const txt = msgText(ev);
-        const p = events.find(
-          (e) => e._pending && e.kind === "message" && e.role === "user" && msgText(e) === txt,
-        );
-        if (p) {
-          p._pending = false; // 서버 확인 → ✓ (실제 메시지는 중복이라 추가 안 함)
-          continue;
+        // 낙관적으로 띄운 내 메시지(_id)가 transcript echo를 모두 흡수 — pending이든 이미 ✓든 중복 추가 안 함
+        const opt = events.find((e) => e.kind === "message" && e.role === "user" && e._id && msgText(e) === txt);
+        if (opt) {
+          if (opt._pending) opt._pending = false; // 첫 echo → ✓
+          continue; // 둘째 echo도 흡수(중복 방지)
         }
       }
-      if (ev.kind === "message" && ev.role === "assistant" && msgText(ev).startsWith("⚠ 전송 실패")) {
-        const p = [...events].reverse().find((e) => e._pending && e.kind === "message" && e.role === "user");
-        if (p) {
-          p._pending = false;
-          p._failed = true;
+      if (ev.kind === "message" && ev.role === "assistant") {
+        setThinking(false); // 응답 도착 → '생각 중' 해제
+        if (msgText(ev).startsWith("⚠ 전송 실패")) {
+          const p = [...events].reverse().find((e) => e._pending && e.kind === "message" && e.role === "user");
+          if (p) {
+            p._pending = false;
+            p._failed = true;
+          }
         }
       }
       toAppend.push(ev);
     }
     if (toAppend.length) events = [...events, ...toAppend];
+  }
+
+  function setThinking(on: boolean) {
+    thinking = on;
+    if (thinkTimer) clearTimeout(thinkTimer);
+    thinkTimer = null;
+    if (on) thinkTimer = setTimeout(() => (thinking = false), 130_000); // 안전망(주입 타임아웃 2분)
   }
 
   async function send(e: Event) {
@@ -444,6 +457,7 @@
     };
     stick = true;
     events = [...events, optimistic];
+    setThinking(true); // 응답 올 때까지 '생각 중…'
 
     try {
       await client.sendChat(selected, text, imgs);
@@ -456,6 +470,7 @@
         }
       }, 90_000);
     } catch {
+      setThinking(false);
       const p = events.find((e) => e._id === id);
       if (p) {
         p._pending = false;
@@ -690,6 +705,14 @@ decku</code></pre>
                 {/each}
               {/if}
             {/each}
+            {#if thinking}
+              <div class="msg assistant">
+                <div class="bubble think">
+                  <span class="dots"><i></i><i></i><i></i></span>
+                  <span class="think-label">생각 중…</span>
+                </div>
+              </div>
+            {/if}
           </div>
           {#if overflow}
             <div class="scrollbar">
@@ -862,6 +885,13 @@ decku</code></pre>
   .sendstat.failed { color: #ffd9d9; font-weight: 600; }
   .mini-spin { display: inline-block; width: 10px; height: 10px; border: 1.5px solid rgba(255, 255, 255, 0.45); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
   .thinking { color: var(--muted); font-style: italic; font-size: 0.92em; }
+  .bubble.think { display: inline-flex; align-items: center; gap: 0.5rem; }
+  .dots { display: inline-flex; gap: 3px; }
+  .dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--muted); display: inline-block; animation: blink 1.2s infinite both; }
+  .dots i:nth-child(2) { animation-delay: 0.2s; }
+  .dots i:nth-child(3) { animation-delay: 0.4s; }
+  @keyframes blink { 0%, 80%, 100% { opacity: 0.25; } 40% { opacity: 1; } }
+  .think-label { color: var(--muted); font-size: 0.85rem; }
   .tool { color: #c07a00; font-family: ui-monospace, monospace; font-size: 0.82rem; }
   @media (prefers-color-scheme: dark) { .tool { color: #e0a64d; } }
   .toolrow { margin: 0.3rem 0; }
