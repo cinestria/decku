@@ -15,7 +15,7 @@ import { loadConfig } from "../lib/config.js";
 import { createPairing, printPairing, pairUrl } from "./pair.js";
 import { ReplayGuard } from "../lib/replay.js";
 import { BridgeRealtime } from "../lib/realtime.js";
-import { injectMessage } from "../lib/inject.js";
+import { injectMessage, checkClaudeAuth } from "../lib/inject.js";
 import { TitleCache } from "../lib/titles.js";
 import { historyList, findTranscript } from "../lib/history.js";
 
@@ -75,6 +75,24 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   qrcode.generate(url, { small: true });
   console.log(`${DIM}  ${url}${RESET}\n`);
   console.log(`${DIM}연결됨. watching… (Ctrl-C 종료)${RESET}`);
+
+  // 헤드리스 claude -p 인증 preflight (백그라운드 — 읽기/연결은 막지 않음).
+  // 실패하면 메시지 전송이 안 되므로 시작 시 크게 안내한다.
+  console.log(`${DIM}claude 인증 확인 중…${RESET}`);
+  void checkClaudeAuth().then((r) => {
+    if (r.ok) {
+      console.log(`${DIM}✓ claude -p 인증 OK — 메시지 전송 가능${RESET}`);
+    } else {
+      console.log(
+        `\n${BOLD}⚠ claude -p 인증 실패 — 메시지 전송(주입)이 안 됩니다.${RESET} ${DIM}(읽기·목록은 정상)${RESET}\n` +
+          `${DIM}  사유: ${r.detail}${RESET}\n` +
+          `  고치기:\n` +
+          `   1) 새 터미널에서  ${BOLD}claude${RESET}  →  ${BOLD}/login${RESET}  재로그인 후  ${BOLD}claude -p "hi"${RESET} 로 확인\n` +
+          `   2) 또는  ${BOLD}export ANTHROPIC_API_KEY=sk-ant-...${RESET}  설정 후 decku 재시작 (사용량 과금)\n` +
+          `${DIM}  고친 뒤 decku 재시작하면 이 경고가 사라집니다.${RESET}\n`,
+      );
+    }
+  });
 
   async function handleCmd(cmd: CmdPayload): Promise<void> {
     const resolvePath = async (sid: string): Promise<string | undefined> => {
