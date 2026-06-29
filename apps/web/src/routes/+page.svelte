@@ -339,7 +339,7 @@
   <a class="ghost nav" href="/docs">Doc</a>
   <a class="ghost nav" href="/faq">FAQ</a>
   {#if !standalone && (installPrompt || isIos)}
-    <button class="ghost" onclick={installApp}>📲 설치</button>
+    <button class="ghost" onclick={installApp}>📲 웹앱 설치</button>
   {/if}
   {#if !pairing}
     <button class="cta" onclick={startScan}>📷 페어링</button>
