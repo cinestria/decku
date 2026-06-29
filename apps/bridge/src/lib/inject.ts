@@ -38,9 +38,12 @@ export function injectMessage(
 
 const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms));
 
-/** 일시적(네트워크/과부하) 실패 — 재시도하면 풀릴 만한 것. */
+/** 일시적(네트워크/과부하) 실패 — 재시도하면 풀릴 만한 것.
+ *  주의: "Invalid authentication credentials"(영구 401)은 재시도 무의미 → 제외해 즉시 실패 표시.
+ *  (소켓 끊김發 401은 "socket"/"closed unexpectedly"로 잡혀 재시도됨) */
 function isTransient(msg: string): boolean {
-  return /socket|closed unexpectedly|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|network|401|429|408|5\d\d|overloaded|timeout/i.test(
+  if (/invalid authentication|authentication credentials/i.test(msg)) return false;
+  return /socket|closed unexpectedly|fetch failed|ECONNRESET|ETIMEDOUT|ENOTFOUND|EAI_AGAIN|network|429|408|5\d\d|overloaded|timeout/i.test(
     msg,
   );
 }
