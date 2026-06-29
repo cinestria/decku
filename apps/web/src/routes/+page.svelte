@@ -489,23 +489,32 @@ decku</code></pre>
               {#if ev.kind === "title"}
                 <div class="title">{ev.title}</div>
               {:else}
-                <div class="msg {ev.role}">
-                  <div class="bubble">
-                    {#each ev.blocks as b}
-                      {#if b.type === "text"}<p>{b.text}</p>
-                      {:else if b.type === "thinking"}<p class="thinking">{b.text}</p>
-                      {:else if b.type === "tool_use"}<p class="tool">⚙ {b.name}{b.summary ? ` ${b.summary}` : ""}</p>
-                      {:else if b.type === "tool_result"}
-                        {#if b.text.trim()}
-                          <details class="toolres">
-                            <summary>↳ 결과 ({b.text.split("\n").length}줄)</summary>
-                            <pre>{b.text.slice(0, 4000)}</pre>
-                          </details>
-                        {/if}
-                      {:else if b.type === "image"}<p class="tool">🖼 이미지</p>{/if}
-                    {/each}
+                {@const real = ev.blocks.filter((b) => b.type === "text" || b.type === "thinking" || b.type === "image")}
+                {@const tools = ev.blocks.filter((b) => b.type === "tool_use" || b.type === "tool_result")}
+                {#if real.length}
+                  <div class="msg {ev.role}">
+                    <div class="bubble">
+                      {#each real as b}
+                        {#if b.type === "text"}<p>{b.text}</p>
+                        {:else if b.type === "thinking"}<p class="thinking">{b.text}</p>
+                        {:else if b.type === "image"}<p class="tool">🖼 이미지</p>{/if}
+                      {/each}
+                    </div>
                   </div>
-                </div>
+                {/if}
+                <!-- 툴 호출/결과는 사용자·어시스턴트 버블 밖, 중립 행으로 (결과는 role:user로 와도 파란 버블 X) -->
+                {#each tools as b}
+                  {#if b.type === "tool_use"}
+                    <div class="toolrow tool">⚙ {b.name}{b.summary ? ` ${b.summary}` : ""}</div>
+                  {:else if b.type === "tool_result" && b.text.trim()}
+                    <div class="toolrow">
+                      <details class="toolres">
+                        <summary>↳ 결과 ({b.text.split("\n").length}줄)</summary>
+                        <pre>{b.text.slice(0, 4000)}</pre>
+                      </details>
+                    </div>
+                  {/if}
+                {/each}
               {/if}
             {/each}
           </div>
@@ -650,6 +659,7 @@ decku</code></pre>
   .thinking { color: var(--muted); font-style: italic; font-size: 0.92em; }
   .tool { color: #c07a00; font-family: ui-monospace, monospace; font-size: 0.82rem; }
   @media (prefers-color-scheme: dark) { .tool { color: #e0a64d; } }
+  .toolrow { margin: 0.3rem 0; }
   .toolres { margin: 0.2rem 0; }
   .toolres summary { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.8rem; cursor: pointer; list-style: none; }
   .toolres summary::-webkit-details-marker { display: none; }

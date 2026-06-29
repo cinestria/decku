@@ -55,6 +55,9 @@ function runClaude(cwd: string, args: string[], stdin?: string): Promise<void> {
       reject(new Error(`claude exit ${code}: ${detail}`));
     });
     if (stdin && child.stdin) {
+      // claude가 입력을 다 읽기 전에 닫으면 write가 EPIPE → 'error' 이벤트가 unhandled면 프로세스 크래시.
+      // 핸들러로 삼키고, 실제 실패 사유는 close(exit code/stderr)에서 보고.
+      child.stdin.on("error", () => {});
       child.stdin.write(stdin);
       child.stdin.end();
     }
