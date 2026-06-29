@@ -717,7 +717,8 @@ decku</code></pre>
   .attach { cursor: pointer; font-size: 1.25rem; user-select: none; opacity: 0.7; flex: none; }
   .attach:hover { opacity: 1; }
   /* min-width:0 이 없으면 input이 내용/placeholder 폭 밑으로 안 줄어 전송 버튼을 화면 밖으로 밀어 잘림 */
-  .composer input { flex: 1; min-width: 0; padding: 0.6rem 0.9rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; font-size: 0.92rem; outline: none; }
+  /* font-size 16px 미만이면 iOS가 포커스 시 화면을 자동 확대 → 16px 고정 */
+  .composer input { flex: 1; min-width: 0; padding: 0.55rem 0.9rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; font-size: 16px; outline: none; }
   .composer input:focus { border-color: var(--accent); }
   .composer button[type="submit"] { flex: none; white-space: nowrap; padding: 0.55rem 1.2rem; border-radius: 999px; border: 0; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
   .composer button:disabled { opacity: 0.45; cursor: default; }

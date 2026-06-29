@@ -28,6 +28,8 @@
     --danger: #ff6b6b;
   }
 }
-body { margin: 0; background: var(--bg); color: var(--text); }
+body { margin: 0; background: var(--bg); color: var(--text); -webkit-text-size-adjust: 100%; }
+/* 더블탭 줌 차단(스크롤·탭은 유지) */
+html { touch-action: manipulation; }
 * { box-sizing: border-box; }
 .muted { color: var(--muted); }
