@@ -18,6 +18,7 @@ const USAGE = `decku — Claude Desktop 세션을 웹앱에 연결
   decku                       페어링(필요 시 자동) + 세션 watch + 중계 — 이것만으로 시작
   decku run                   위와 동일 (명시적). --console 로 로컬 전용 모드
   decku pair                  재페어링/QR 다시 보기 (--new 새 namespace, --url 웹주소)
+                              --new --expire-days N: N일 후 만료되는 페어링(기본 무제한)
   decku install               부팅 시 자동 시작 등록 (macOS)
   decku uninstall             자동 시작 해제
 `;

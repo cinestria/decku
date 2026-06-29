@@ -12,6 +12,7 @@ export interface BridgeConfig {
   e2eeKey: string; // base64url (32B)
   supabaseUrl: string;
   supabaseAnonKey: string;
+  pairingToken?: string; // --expire-days 페어링 시에만. realtime-token 발급 게이트.
 }
 
 export const DECKU_DIR = join(homedir(), ".decku");

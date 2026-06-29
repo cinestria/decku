@@ -30,6 +30,7 @@ export class DeckuClient {
   private cmdCh?: RealtimeChannel;
   private txCh?: RealtimeChannel;
   private refreshTimer?: ReturnType<typeof setInterval>;
+  private watchTimer?: ReturnType<typeof setInterval>;
 
   constructor(private p: Pairing) {
     const url = env.PUBLIC_SUPABASE_URL;
@@ -51,12 +52,19 @@ export class DeckuClient {
     this.refreshTimer = setInterval(() => {
       void this.refresh().catch((e) => console.error("토큰 갱신 실패:", e));
     }, REFRESH_MS);
-    await this.join(sessionsChannel(this.p.ns), async (env) => {
+    const sessionsCh = await this.join(sessionsChannel(this.p.ns), async (env) => {
       const payload = await decrypt<SessionsPayload | HistoryPayload>(this.key, env);
       if (payload.type === "sessions") handlers.onSessions(payload.items);
       else if (payload.type === "history") handlers.onHistory?.(payload.items);
     });
+    // presence 등록 → 브릿지가 "보는 사람 있음"을 알고 그때만 heartbeat 전송
+    await sessionsCh.track({ at: Date.now() });
     this.cmdCh = await this.join(cmdChannel(this.p.ns)); // 송신용
+    // watch keepalive(presence 폴백) — 보는 동안 30s마다 신호
+    await this.sendCmd({ op: "watch" });
+    this.watchTimer = setInterval(() => {
+      void this.sendCmd({ op: "watch" }).catch(() => {});
+    }, 30_000);
   }
 
   /** 과거 세션 기록 요청 (브릿지가 history 채널로 응답). */
@@ -79,7 +87,15 @@ export class DeckuClient {
 
   /** 채팅 전송: 브릿지가 claude --resume로 주입. 이미지 첨부 가능. */
   async sendChat(sessionId: string, text: string, images?: ImageAttachment[]): Promise<void> {
-    await this.sendCmd({ op: "send", sessionId, text, ...(images?.length ? { images } : {}) });
+    // ts·nonce: 브릿지 재전송 방어용 (E2EE 봉투 안에 들어감)
+    await this.sendCmd({
+      op: "send",
+      sessionId,
+      text,
+      ...(images?.length ? { images } : {}),
+      ts: Date.now(),
+      nonce: crypto.randomUUID(),
+    });
   }
 
   private async sendCmd(cmd: CmdPayload): Promise<void> {
@@ -92,9 +108,10 @@ export class DeckuClient {
     const r = await fetch("/api/realtime-token", {
       method: "POST",
       headers: { "content-type": "application/json" },
-      body: JSON.stringify({ namespace: this.p.ns }),
+      // 만료 토큰 있으면 그걸로(만료 검사), 없으면 namespace로(무제한)
+      body: JSON.stringify(this.p.t ? { pairingToken: this.p.t } : { namespace: this.p.ns }),
     });
-    if (!r.ok) throw new Error(`realtime-token ${r.status}`);
+    if (!r.ok) throw new Error(r.status === 403 ? "페어링 만료됨 — 다시 페어링하세요" : `realtime-token ${r.status}`);
     const { token } = (await r.json()) as { token: string };
     await this.sb.realtime.setAuth(token);
   }
@@ -131,6 +148,7 @@ export class DeckuClient {
 
   async stop(): Promise<void> {
     if (this.refreshTimer) clearInterval(this.refreshTimer);
+    if (this.watchTimer) clearInterval(this.watchTimer);
     await this.sb.removeAllChannels();
   }
 }

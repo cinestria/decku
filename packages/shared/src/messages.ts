@@ -84,13 +84,18 @@ export const CmdPayloadSchema = z.discriminatedUnion("op", [
   // 세션 transcript backfill 요청
   z.object({ op: z.literal("load"), sessionId: z.string() }),
   // 채팅 전송 (resume 로 주입). 이미지 첨부 가능.
+  // ts·nonce: 재전송(replay) 방어 — 브릿지가 오래된/중복 cmd를 거부 (E2EE 봉투 안이라 위조 불가).
   z.object({
     op: z.literal("send"),
     sessionId: z.string(),
     text: z.string(),
     images: z.array(ImageAttachmentSchema).optional(),
+    ts: z.number().optional(),
+    nonce: z.string().optional(),
   }),
   // 과거 세션 기록 요청
   z.object({ op: z.literal("history"), limit: z.number().optional() }),
+  // 시청 중 신호(keepalive) — 브릿지가 "보는 사람 있음" 판정 (presence 폴백)
+  z.object({ op: z.literal("watch") }),
 ]);
 export type CmdPayload = z.infer<typeof CmdPayloadSchema>;

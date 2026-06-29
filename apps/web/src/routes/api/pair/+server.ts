@@ -8,11 +8,20 @@ import { json } from "@sveltejs/kit";
 import { env } from "$env/dynamic/public";
 import type { RequestHandler } from "./$types";
 import { newNamespace } from "$lib/server/namespace";
+import { signPairingToken } from "$lib/server/jwt";
 
-export const POST: RequestHandler = async () => {
-  return json({
-    namespace: newNamespace(),
+export const POST: RequestHandler = async ({ request }) => {
+  const body = (await request.json().catch(() => null)) as { expireDays?: number } | null;
+  const namespace = newNamespace();
+  const res: Record<string, unknown> = {
+    namespace,
     supabaseUrl: env.PUBLIC_SUPABASE_URL,
     supabaseAnonKey: env.PUBLIC_SUPABASE_ANON_KEY,
-  });
+  };
+  // expireDays 지정 시에만 만료 토큰 발급(opt-in). 미지정=무제한(기존 동작).
+  const days = body?.expireDays;
+  if (typeof days === "number" && days > 0) {
+    res.pairingToken = await signPairingToken(namespace, days);
+  }
+  return json(res);
 };

@@ -6,6 +6,7 @@
 export interface Pairing {
   ns: string; // namespace (자격증명)
   k: string; // e2ee key (base64url)
+  t?: string; // 만료 페어링 토큰(opt-in). realtime-token 발급 시 제시.
 }
 
 const STORE_KEY = "decku.pairing";
@@ -18,7 +19,8 @@ export function loadPairing(): Pairing | null {
     const ns = h.get("ns");
     const k = h.get("k");
     if (ns && k) {
-      const p: Pairing = { ns, k };
+      const t = h.get("t");
+      const p: Pairing = { ns, k, ...(t ? { t } : {}) };
       localStorage.setItem(STORE_KEY, JSON.stringify(p));
       history.replaceState(null, "", location.pathname + location.search);
       return p;
@@ -33,7 +35,7 @@ export function clearPairing(): void {
   localStorage.removeItem(STORE_KEY);
 }
 
-/** 스캔한 QR 텍스트(페어링 URL)에서 ns/k 파싱해 저장. 성공 시 true. */
+/** 스캔한 QR 텍스트(페어링 URL)에서 ns/k/t 파싱해 저장. 성공 시 true. */
 export function savePairingFromUrl(text: string): boolean {
   try {
     const u = new URL(text);
@@ -41,7 +43,8 @@ export function savePairingFromUrl(text: string): boolean {
     const ns = h.get("ns");
     const k = h.get("k");
     if (ns && k) {
-      localStorage.setItem(STORE_KEY, JSON.stringify({ ns, k }));
+      const t = h.get("t");
+      localStorage.setItem(STORE_KEY, JSON.stringify({ ns, k, ...(t ? { t } : {}) }));
       return true;
     }
   } catch {

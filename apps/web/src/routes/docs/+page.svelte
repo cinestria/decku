@@ -40,12 +40,14 @@ decku --console            # 중계 없이 로컬 콘솔에서 목록·tail만</
   <section class="block">
     <h2><code>decku pair</code></h2>
     <p>첫 페어링은 <code>decku</code> 실행 시 자동으로 되므로 보통 직접 칠 일은 없습니다. <strong>재페어링</strong>하거나 QR을 다시 보고 싶을 때 사용해요.</p>
-    <pre class="cmd"><code>decku pair                 # 저장된 페어링 재사용 + QR 다시 출력
-decku pair --new           # 기존 페어링 버리고 새 namespace 발급
-decku pair --url &lt;webUrl&gt;   # 다른 웹 주소로 페어링</code></pre>
+    <pre class="cmd"><code>decku pair                      # 저장된 페어링 재사용 + QR 다시 출력
+decku pair --new                # 기존 페어링 버리고 새 namespace 발급
+decku pair --new --expire-days 7  # 7일 후 만료되는 페어링
+decku pair --url &lt;webUrl&gt;        # 다른 웹 주소로 페어링</code></pre>
     <table class="opts">
       <tbody>
         <tr><td><code>--new</code></td><td>저장된 페어링을 무시하고 새 namespace·키를 발급. 기존 기기 연결은 끊깁니다.</td></tr>
+        <tr><td><code>--expire-days &lt;N&gt;</code></td><td>N일 후 만료되는 페어링(<code>--new</code>와 함께). 만료되면 재연결 불가 → 다시 페어링. <strong>기본은 무제한</strong>(상시 실행이 끊기지 않도록).</td></tr>
         <tr><td><code>--url &lt;webUrl&gt;</code></td><td>연결할 웹앱 주소. 생략 시 <code>https://decku.app</code> (환경변수 <code>DECKU_URL</code> 로도 지정 가능).</td></tr>
       </tbody>
     </table>
