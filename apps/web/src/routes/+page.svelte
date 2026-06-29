@@ -441,7 +441,7 @@ decku pair</code></pre>
       </div>
     </section>
 
-    <footer class="lfoot">© decku · 무료</footer>
+    <footer class="lfoot">© decku · <a href="https://github.com/cinestria/decku" target="_blank" rel="noreferrer">GitHub</a></footer>
   </main>
 {:else}
   <div class="layout" class:has-sel={selected}>
@@ -598,6 +598,8 @@ decku pair</code></pre>
   .small { font-size: 0.8rem; }
 
   .lfoot { margin-top: 3rem; text-align: center; color: var(--muted); font-size: 0.8rem; }
+  .lfoot a { color: var(--accent); text-decoration: none; }
+  .lfoot a:hover { text-decoration: underline; }
 
   .scanner { width: 100%; max-width: 320px; border-radius: 14px; background: #000; margin: 1rem auto; }
   .err { color: var(--danger); }
