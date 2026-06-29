@@ -17,7 +17,9 @@
   let history = $state<SessionListItem[]>([]);
   let historyLoading = $state(false);
   let selected = $state<string | null>(null);
-  let events = $state<RenderEvent[]>([]);
+  // 낙관적 전송용 마커(_id 있으면 내가 방금 보낸 것: _pending=스피너, 확인=✓, _failed=⚠)
+  type UiEvent = RenderEvent & { _id?: string; _pending?: boolean; _failed?: boolean };
+  let events = $state<UiEvent[]>([]);
   let loading = $state(false);
   let draft = $state("");
   let pendingImages = $state<{ att: ImageAttachment; url: string }[]>([]);
@@ -202,7 +204,7 @@
         loading = false;
       }
     } else {
-      events = [...events, ...tx.events]; // 라이브 append (또는 구버전 브릿지 백필)
+      ingestLive(tx.events); // 라이브 append (낙관적 메시지 ✓/⚠ 조정)
     }
     if (tx.done) loading = false;
   }
@@ -388,19 +390,78 @@
     pendingImages = pendingImages.filter((_, idx) => idx !== i);
   }
 
+  function msgText(ev: RenderEvent): string {
+    if (ev.kind !== "message") return "";
+    return ev.blocks
+      .filter((b) => b.type === "text")
+      .map((b) => (b as { text: string }).text)
+      .join("")
+      .trim();
+  }
+
+  /** 라이브 tx 수신: 내가 낙관적으로 띄운 메시지면 중복 추가 대신 ✓ 처리, 실패 메시지면 ⚠ 처리. */
+  function ingestLive(incoming: RenderEvent[]) {
+    const toAppend: UiEvent[] = [];
+    for (const ev of incoming) {
+      if (ev.kind === "message" && ev.role === "user") {
+        const txt = msgText(ev);
+        const p = events.find(
+          (e) => e._pending && e.kind === "message" && e.role === "user" && msgText(e) === txt,
+        );
+        if (p) {
+          p._pending = false; // 서버 확인 → ✓ (실제 메시지는 중복이라 추가 안 함)
+          continue;
+        }
+      }
+      if (ev.kind === "message" && ev.role === "assistant" && msgText(ev).startsWith("⚠ 전송 실패")) {
+        const p = [...events].reverse().find((e) => e._pending && e.kind === "message" && e.role === "user");
+        if (p) {
+          p._pending = false;
+          p._failed = true;
+        }
+      }
+      toAppend.push(ev);
+    }
+    if (toAppend.length) events = [...events, ...toAppend];
+  }
+
   async function send(e: Event) {
     e.preventDefault();
-    if (!client || !selected || sending) return;
+    if (!client || !selected) return;
     if (!draft.trim() && pendingImages.length === 0) return;
     const text = draft;
     const imgs = pendingImages.map((p) => p.att);
     draft = "";
     pendingImages = [];
-    sending = true;
+
+    // 낙관적: 보내자마자 내 말풍선 표시(스피너). transcript echo가 오면 ✓.
+    const id = crypto.randomUUID();
+    const optimistic: UiEvent = {
+      kind: "message",
+      role: "user",
+      blocks: [...imgs.map(() => ({ type: "image" as const })), ...(text ? [{ type: "text" as const, text }] : [])],
+      _id: id,
+      _pending: true,
+    };
+    stick = true;
+    events = [...events, optimistic];
+
     try {
       await client.sendChat(selected, text, imgs);
-    } finally {
-      sending = false;
+      // 안전망: 오래도록 확인 안 되면(주입 실패 등) 스피너 → ⚠
+      setTimeout(() => {
+        const p = events.find((e) => e._id === id && e._pending);
+        if (p) {
+          p._pending = false;
+          p._failed = true;
+        }
+      }, 90_000);
+    } catch {
+      const p = events.find((e) => e._id === id);
+      if (p) {
+        p._pending = false;
+        p._failed = true;
+      }
     }
   }
 
@@ -602,6 +663,13 @@ decku</code></pre>
                         {:else if b.type === "thinking"}<p class="thinking">{b.text}</p>
                         {:else if b.type === "image"}<p class="tool">🖼 이미지</p>{/if}
                       {/each}
+                      {#if ev._id}
+                        <span class="sendstat" class:failed={ev._failed}>
+                          {#if ev._pending}<span class="mini-spin"></span>
+                          {:else if ev._failed}⚠ 실패
+                          {:else}✓{/if}
+                        </span>
+                      {/if}
                     </div>
                   </div>
                 {/if}
@@ -781,6 +849,9 @@ decku</code></pre>
   .bubble p { margin: 0.2rem 0; white-space: pre-wrap; word-break: break-word; }
   .bubble p:first-child { margin-top: 0; }
   .bubble p:last-child { margin-bottom: 0; }
+  .sendstat { display: block; text-align: right; margin-top: 0.2rem; font-size: 0.7rem; line-height: 1; color: rgba(255, 255, 255, 0.75); }
+  .sendstat.failed { color: #ffd9d9; font-weight: 600; }
+  .mini-spin { display: inline-block; width: 10px; height: 10px; border: 1.5px solid rgba(255, 255, 255, 0.45); border-top-color: #fff; border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; }
   .thinking { color: var(--muted); font-style: italic; font-size: 0.92em; }
   .tool { color: #c07a00; font-family: ui-monospace, monospace; font-size: 0.82rem; }
   @media (prefers-color-scheme: dark) { .tool { color: #e0a64d; } }
