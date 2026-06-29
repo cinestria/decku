@@ -401,7 +401,9 @@
           <h2>Mac에서 브릿지 실행</h2>
           <p class="muted">Node만 있으면 설치 없이 바로:</p>
           <pre class="cmd"><code>{pairCmd}</code></pre>
-          <p class="muted small">자주 쓴다면 <code>npm i -g @decku/cli</code> 후 <code>decku run</code>.</p>
+          <p class="muted small">자주 쓴다면 전역 설치 후 <code>decku</code> 명령으로:</p>
+          <pre class="cmd"><code>npm i -g @decku/cli
+decku pair</code></pre>
         </div>
       </div>
 
@@ -424,7 +426,7 @@
       </div>
     </section>
 
-    <footer class="lfoot">© decku · 무료</footer>
+    <footer class="lfoot"><a href="/faq">자주 묻는 질문</a> · © decku · 무료</footer>
   </main>
 {:else}
   <div class="layout" class:has-sel={selected}>
@@ -533,39 +535,6 @@
 {/if}
 
 <style>
-  :global(:root) {
-    --bg: #ffffff;
-    --surface: #f7f8fa;
-    --surface-2: #eef0f4;
-    --border: #e6e8ec;
-    --text: #1c1f25;
-    --muted: #8b929e;
-    --accent: #4f6bed;
-    --accent-weak: #eef1fe;
-    --user-bubble: #4f6bed;
-    --user-text: #ffffff;
-    --asst-bubble: #f2f4f8;
-    --danger: #d93636;
-  }
-  @media (prefers-color-scheme: dark) {
-    :global(:root) {
-      --bg: #0f1116;
-      --surface: #161922;
-      --surface-2: #1d212b;
-      --border: #2a2f3a;
-      --text: #e7e9ee;
-      --muted: #8b929e;
-      --accent: #6d86ff;
-      --accent-weak: #1b2236;
-      --user-bubble: #3f5bdb;
-      --user-text: #ffffff;
-      --asst-bubble: #1d212b;
-      --danger: #ff6b6b;
-    }
-  }
-  :global(body) { margin: 0; background: var(--bg); color: var(--text); }
-  :global(*) { box-sizing: border-box; }
-
   header {
     display: flex; align-items: center; gap: 0.6rem;
     padding: 0.55rem 1rem; border-bottom: 1px solid var(--border);
@@ -607,7 +576,7 @@
   .step-body h2 { font-size: 1.08rem; margin: 0 0 0.35rem; }
   .step-body > p { margin: 0.2rem 0; }
   .cmd { background: var(--surface-2); border: 1px solid var(--border); border-radius: 10px; padding: 0.8rem 1rem; overflow-x: auto; margin: 0.55rem 0; }
-  .cmd code { background: none; padding: 0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.85rem; color: var(--text); white-space: nowrap; }
+  .cmd code { background: none; padding: 0; font-family: ui-monospace, SFMono-Regular, monospace; font-size: 0.85rem; color: var(--text); white-space: pre; line-height: 1.5; }
   .small { font-size: 0.8rem; }
 
   .lfoot { margin-top: 3rem; text-align: center; color: var(--muted); font-size: 0.8rem; }
