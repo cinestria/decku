@@ -96,12 +96,12 @@ export class BridgeRealtime {
 
   async publishSessions(payload: SessionsPayload): Promise<void> {
     const env = await encrypt(this.key, payload);
-    await this.sessionsCh.send({ type: "broadcast", event: "msg", payload: env });
+    await this.broadcast(this.sessionsCh, env);
   }
 
   async publishHistory(payload: HistoryPayload): Promise<void> {
     const env = await encrypt(this.key, payload);
-    await this.sessionsCh.send({ type: "broadcast", event: "msg", payload: env });
+    await this.broadcast(this.sessionsCh, env);
   }
 
   async publishTx(payload: TxPayload): Promise<void> {
@@ -111,7 +111,13 @@ export class BridgeRealtime {
       this.txChs.set(payload.sessionId, ch);
     }
     const env = await encrypt(this.key, payload);
-    await ch.send({ type: "broadcast", event: "msg", payload: env });
+    await this.broadcast(ch, env);
+  }
+
+  /** REST broadcast로 명시 전송 (send()의 자동 REST 폴백 deprecation 경고 회피). */
+  private async broadcast(ch: RealtimeChannel, env: EncryptedEnvelope): Promise<void> {
+    const res = await ch.httpSend("msg", env);
+    if (!res.success) console.error(`broadcast 실패 (${res.status}): ${res.error}`);
   }
 
   async close(): Promise<void> {
