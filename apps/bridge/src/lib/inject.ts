@@ -30,7 +30,8 @@ export function injectMessage(
 
   return runClaude(
     cwd,
-    ["-p", "--resume", sessionId, "--input-format", "stream-json", "--output-format", "stream-json"],
+    // -p + stream-json 출력은 claude가 --verbose 를 요구함
+    ["-p", "--resume", sessionId, "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"],
     line,
   );
 }
