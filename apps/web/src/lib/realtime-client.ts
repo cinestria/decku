@@ -60,11 +60,11 @@ export class DeckuClient {
     // presence 등록 → 브릿지가 "보는 사람 있음"을 알고 그때만 heartbeat 전송
     await sessionsCh.track({ at: Date.now() });
     this.cmdCh = await this.join(cmdChannel(this.p.ns)); // 송신용
-    // watch keepalive(presence 폴백) — 보는 동안 30s마다 신호
+    // watch keepalive(presence 폴백) — 보는 동안 12s마다 신호 (브릿지 TTL 60s, 깜빡임 방지)
     await this.sendCmd({ op: "watch" });
     this.watchTimer = setInterval(() => {
       void this.sendCmd({ op: "watch" }).catch(() => {});
-    }, 30_000);
+    }, 12_000);
   }
 
   /** 과거 세션 기록 요청 (브릿지가 history 채널로 응답). */

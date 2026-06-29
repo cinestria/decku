@@ -21,7 +21,7 @@ import { historyList, findTranscript } from "../lib/history.js";
 
 const POLL_MS = 1000;
 const HEARTBEAT_MS = 4000; // 늦게 접속한 브라우저도 목록 받도록 주기적 재전송 (broadcast는 replay 없음)
-const WATCH_TTL_MS = 35000; // 마지막 watch-ping 후 이 시간까지 "보는 중"으로 간주 (브라우저 30s 주기)
+const WATCH_TTL_MS = 60000; // 마지막 watch-ping 후 이 시간까지 "보는 중" 간주 (브라우저 12s 주기 → 5배 마진, 깜빡임 방지)
 const BACKFILL_CHUNK = 40; // 이벤트/청크 (메시지 크기 한도 회피)
 const DIM = "\x1b[2m";
 const BOLD = "\x1b[1m";

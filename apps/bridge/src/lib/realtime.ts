@@ -89,7 +89,9 @@ export class BridgeRealtime {
   /** 끊긴 연결 자가복구: sessions 채널이 joined가 아니면 토큰 갱신 + 전체 재구독. */
   private async ensureHealthy(): Promise<void> {
     if (this.healing) return;
-    if (String(this.sessionsCh?.state) === "joined") return;
+    // 확실히 끊긴 상태에서만 재연결 (joining/leaving 등 일시 상태엔 손대지 않음 → 불필요한 재구독·깜빡임 방지)
+    const st = String(this.sessionsCh?.state);
+    if (st !== "closed" && st !== "errored" && this.sessionsCh) return;
     this.healing = true;
     console.warn(`realtime 재연결 중… (sessions 상태: ${this.sessionsCh?.state})`);
     try {
