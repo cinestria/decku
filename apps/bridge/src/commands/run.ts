@@ -15,7 +15,7 @@ import { loadConfig } from "../lib/config.js";
 import { createPairing, printPairing, pairUrl } from "./pair.js";
 import { ReplayGuard } from "../lib/replay.js";
 import { BridgeRealtime } from "../lib/realtime.js";
-import { injectMessage, checkClaudeAuth } from "../lib/inject.js";
+import { injectMessage, checkClaudeAuth, claudeLogin } from "../lib/inject.js";
 import { TitleCache } from "../lib/titles.js";
 import { historyList, findTranscript } from "../lib/history.js";
 
@@ -53,9 +53,38 @@ export async function run(argv: string[] = []): Promise<void> {
   return runRealtime(cfg, argv);
 }
 
+/** realtime 연결 전 claude 인증 확인. 만료/미인증이면 (TTY에서) `claude login` 유도 후 재확인. */
+async function ensureClaudeAuth(): Promise<void> {
+  process.stdout.write(`${DIM}claude 인증 확인 중…${RESET} `);
+  let auth = await checkClaudeAuth();
+  if (auth.ok) {
+    console.log(`${DIM}✓${RESET}`);
+    return;
+  }
+  console.log(`\n${BOLD}⚠ claude 인증이 필요합니다${RESET} ${DIM}(${auth.detail})${RESET}`);
+
+  if (process.stdin.isTTY) {
+    console.log(`${DIM}로그인을 진행합니다 — 브라우저에서 완료하세요…${RESET}\n`);
+    await claudeLogin();
+    auth = await checkClaudeAuth();
+    if (auth.ok) {
+      console.log(`${DIM}✓ 인증 완료 — 메시지 전송 가능${RESET}\n`);
+      return;
+    }
+  }
+  // 비TTY(launchd 등)이거나 로그인 후에도 실패 → 읽기는 되니 계속 진행, 안내만
+  console.log(
+    `${BOLD}⚠ 인증 안 됨 — 읽기·목록은 되지만 메시지 전송은 안 됩니다.${RESET}\n` +
+      `${DIM}   터미널에서  ${RESET}${BOLD}claude login${RESET}${DIM}  또는  ${RESET}${BOLD}export ANTHROPIC_API_KEY=sk-ant-...${RESET}${DIM}  후 decku 재시작.${RESET}\n`,
+  );
+}
+
 // ───────────────────────── realtime 모드 ─────────────────────────
 
 async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig>>>, argv: string[]): Promise<void> {
+  // realtime 연결 전에 claude 인증부터 (메시지 전송에 필요). 만료면 로그인 유도.
+  await ensureClaudeAuth();
+
   console.log(`${BOLD}decku${RESET} realtime 연결 중… (namespace ${shortId(cfg.namespace)}…)`);
   const rt = new BridgeRealtime(cfg);
 
@@ -75,24 +104,6 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   qrcode.generate(url, { small: true });
   console.log(`${DIM}  ${url}${RESET}\n`);
   console.log(`${DIM}연결됨. watching… (Ctrl-C 종료)${RESET}`);
-
-  // 헤드리스 claude -p 인증 preflight (백그라운드 — 읽기/연결은 막지 않음).
-  // 실패하면 메시지 전송이 안 되므로 시작 시 크게 안내한다.
-  console.log(`${DIM}claude 인증 확인 중…${RESET}`);
-  void checkClaudeAuth().then((r) => {
-    if (r.ok) {
-      console.log(`${DIM}✓ claude -p 인증 OK — 메시지 전송 가능${RESET}`);
-    } else {
-      console.log(
-        `\n${BOLD}⚠ claude -p 인증 실패 — 메시지 전송(주입)이 안 됩니다.${RESET} ${DIM}(읽기·목록은 정상)${RESET}\n` +
-          `${DIM}  사유: ${r.detail}${RESET}\n` +
-          `  고치기:\n` +
-          `   1) 새 터미널에서  ${BOLD}claude${RESET}  →  ${BOLD}/login${RESET}  재로그인 후  ${BOLD}claude -p "hi"${RESET} 로 확인\n` +
-          `   2) 또는  ${BOLD}export ANTHROPIC_API_KEY=sk-ant-...${RESET}  설정 후 decku 재시작 (사용량 과금)\n` +
-          `${DIM}  고친 뒤 decku 재시작하면 이 경고가 사라집니다.${RESET}\n`,
-      );
-    }
-  });
 
   async function handleCmd(cmd: CmdPayload): Promise<void> {
     const resolvePath = async (sid: string): Promise<string | undefined> => {

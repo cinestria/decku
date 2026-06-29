@@ -11,39 +11,37 @@ import { spawn } from "node:child_process";
 import type { ImageAttachment } from "@decku/shared";
 
 /**
- * 헤드리스 `claude -p` 인증 점검 (브릿지 시작 시 preflight).
- * 주입과 같은 경로라, 여기서 401이면 메시지 전송도 안 된다(읽기/목록은 별개로 됨).
- * 401은 토큰 0이라 비용 없음. 성공 시 짧은 응답 1턴(수십 토큰)만 소모.
+ * 헤드리스 claude 인증 점검 — `claude whoami` 로 **토큰 0(추론 없음)** 검증.
+ * `auth status`는 토큰 존재만 봐서 만료를 못 잡지만, whoami는 실제 검증해 만료 401을 잡는다.
  */
 export function checkClaudeAuth(): Promise<{ ok: boolean; detail?: string }> {
   return new Promise((resolve) => {
-    const child = spawn("claude", ["-p", "ok", "--output-format", "json"], {
-      stdio: ["ignore", "pipe", "pipe"],
-      env: process.env,
-    });
+    const child = spawn("claude", ["whoami"], { stdio: ["ignore", "pipe", "pipe"], env: process.env });
     let out = "";
-    let err = "";
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
       resolve({ ok: false, detail: "시간 초과" });
-    }, 30000);
+    }, 20000);
     child.stdout?.on("data", (d) => (out += String(d)));
-    child.stderr?.on("data", (d) => (err += String(d)));
+    child.stderr?.on("data", (d) => (out += String(d)));
     child.on("error", (e) => {
       clearTimeout(timer);
       resolve({ ok: false, detail: `claude 실행 실패: ${e.message}` });
     });
-    child.on("close", (code) => {
+    child.on("close", () => {
       clearTimeout(timer);
-      // --output-format json: exit 0이어도 is_error:true(401 등)일 수 있음
-      try {
-        const j = JSON.parse(out.trim()) as { is_error?: boolean; result?: string };
-        return resolve(j.is_error ? { ok: false, detail: j.result ?? "오류" } : { ok: true });
-      } catch {
-        if (code === 0) return resolve({ ok: true });
-        resolve({ ok: false, detail: (err.trim() || out.trim() || `exit ${code}`).slice(0, 200) });
-      }
+      const bad = /401|failed to authenticate|invalid authentication|not logged in|logged out|no credentials/i.test(out);
+      resolve(bad ? { ok: false, detail: out.trim().slice(0, 160) } : { ok: true });
     });
+  });
+}
+
+/** `claude login` 대화형 실행 (TTY에서만). 성공 여부 반환. */
+export function claudeLogin(): Promise<boolean> {
+  return new Promise((resolve) => {
+    const child = spawn("claude", ["login"], { stdio: "inherit", env: process.env });
+    child.on("error", () => resolve(false));
+    child.on("close", (code) => resolve(code === 0));
   });
 }
 
