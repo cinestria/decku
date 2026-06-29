@@ -85,6 +85,11 @@ export class DeckuClient {
     await this.sendCmd({ op: "load", sessionId: sid });
   }
 
+  /** 위로 스와이프 시 더 옛날 청크 요청 (before 인덱스 앞). */
+  async loadOlder(sid: string, before: number): Promise<void> {
+    await this.sendCmd({ op: "loadMore", sessionId: sid, before });
+  }
+
   /** 채팅 전송: 브릿지가 claude --resume로 주입. 이미지 첨부 가능. */
   async sendChat(sessionId: string, text: string, images?: ImageAttachment[]): Promise<void> {
     // ts·nonce: 브릿지 재전송 방어용 (E2EE 봉투 안에 들어감)

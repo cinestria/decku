@@ -76,13 +76,17 @@ export const TxPayloadSchema = z.object({
   events: z.array(RenderEventSchema),
   seq: z.number().optional(),
   done: z.boolean().optional(),
+  firstIndex: z.number().optional(), // backfill 배치 첫 이벤트의 전체 transcript 인덱스(있으면 backfill, 없으면 라이브 append)
+  total: z.number().optional(), // 전체 이벤트 수
 });
 export type TxPayload = z.infer<typeof TxPayloadSchema>;
 
 /** cmd 채널: 브라우저 → 브릿지. */
 export const CmdPayloadSchema = z.discriminatedUnion("op", [
-  // 세션 transcript backfill 요청
+  // 세션 transcript backfill 요청 (마지막 청크만 = tail)
   z.object({ op: z.literal("load"), sessionId: z.string() }),
+  // 더 옛날 청크 요청 (before 인덱스 앞 BACKFILL_CHUNK개) — 위로 스와이프 시
+  z.object({ op: z.literal("loadMore"), sessionId: z.string(), before: z.number() }),
   // 채팅 전송 (resume 로 주입). 이미지 첨부 가능.
   // ts·nonce: 재전송(replay) 방어 — 브릿지가 오래된/중복 cmd를 거부 (E2EE 봉투 안이라 위조 불가).
   z.object({

@@ -91,37 +91,52 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   console.log(`${DIM}연결됨. watching… (Ctrl-C 종료)${RESET}`);
 
   async function handleCmd(cmd: CmdPayload): Promise<void> {
+    const resolvePath = async (sid: string): Promise<string | undefined> => {
+      const s = liveMap.get(sid);
+      return s ? transcriptPath(s) : (await findTranscript(sid))?.path;
+    };
+
     if (cmd.op === "load") {
       const s = liveMap.get(cmd.sessionId);
-      // live면 registry 경로, 아니면 과거 transcript에서 탐색
-      const path = s ? transcriptPath(s) : (await findTranscript(cmd.sessionId))?.path;
+      const path = await resolvePath(cmd.sessionId);
       if (!path) {
         console.log(`${DIM}load: 세션 ${shortId(cmd.sessionId)} 못 찾음${RESET}`);
         return;
       }
-      // 전체 백필 (청크 분할)
+      // tail backfill — 마지막 청크만 (위로 스와이프하면 loadMore로 옛날 청크)
       const all = await new TranscriptTail(path).init(true);
-      const chunks = chunk(all, BACKFILL_CHUNK);
-      for (let i = 0; i < chunks.length; i++) {
-        const payload: TxPayload = {
-          type: "tx",
-          sessionId: cmd.sessionId,
-          events: chunks[i]!,
-          seq: i,
-          done: i === chunks.length - 1,
-        };
-        await rt.publishTx(payload);
-      }
-      if (chunks.length === 0) {
-        await rt.publishTx({ type: "tx", sessionId: cmd.sessionId, events: [], seq: 0, done: true });
-      }
-      console.log(`${DIM}backfill ${shortId(cmd.sessionId)}: ${all.length} events (${chunks.length} chunks)${RESET}`);
+      const total = all.length;
+      const start = Math.max(0, total - BACKFILL_CHUNK);
+      await rt.publishTx({
+        type: "tx",
+        sessionId: cmd.sessionId,
+        events: all.slice(start),
+        firstIndex: start,
+        total,
+        done: true,
+      });
+      console.log(`${DIM}backfill(tail) ${shortId(cmd.sessionId)}: ${total - start}/${total}${RESET}`);
       // live 세션만 이후 append 추적 (과거 세션은 append 없음)
       if (s && !activeTails.has(cmd.sessionId)) {
         const t = new TranscriptTail(path);
         await t.init(false);
         activeTails.set(cmd.sessionId, t);
       }
+    } else if (cmd.op === "loadMore") {
+      const path = await resolvePath(cmd.sessionId);
+      if (!path) return;
+      const all = await new TranscriptTail(path).init(true);
+      const before = Math.max(0, Math.min(cmd.before, all.length));
+      const start = Math.max(0, before - BACKFILL_CHUNK);
+      if (start >= before) return; // 더 없음
+      await rt.publishTx({
+        type: "tx",
+        sessionId: cmd.sessionId,
+        events: all.slice(start, before),
+        firstIndex: start,
+        total: all.length,
+      });
+      console.log(`${DIM}backfill(older) ${shortId(cmd.sessionId)}: [${start},${before})${RESET}`);
     } else if (cmd.op === "send") {
       // 재전송 방어: 오래되거나 중복된(또는 ts/nonce 없는) send는 주입 거부
       if (!replay.check(cmd.nonce, cmd.ts)) {
@@ -229,11 +244,6 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
   console.log(`${DIM}bye${RESET}`);
 }
 
-function chunk<T>(arr: T[], n: number): T[][] {
-  const out: T[][] = [];
-  for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n));
-  return out;
-}
 
 // ───────────────────────── 콘솔 모드 (M1) ─────────────────────────
 

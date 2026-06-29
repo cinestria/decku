@@ -172,16 +172,58 @@
     void client?.stop();
   });
 
+  // 역방향 lazy 백필 상태
+  let oldestIndex = $state(0); // 현재 로드된 가장 옛 이벤트의 전체 인덱스
+  let hasMore = $state(false); // 더 옛날이 있나
+  let loadingOlder = $state(false);
+
   async function loadSession(sid: string) {
     if (!client) return;
     selected = sid;
     events = [];
     loading = true;
     stick = true; // 열면 최신(바닥)으로
-    await client.openSession(sid, (tx: TxPayload) => {
-      events = [...events, ...tx.events];
-      if (tx.done) loading = false;
+    oldestIndex = 0;
+    hasMore = false;
+    loadingOlder = false;
+    await client.openSession(sid, onTx);
+  }
+
+  function onTx(tx: TxPayload) {
+    if (tx.firstIndex != null) {
+      // backfill 배치
+      oldestIndex = tx.firstIndex;
+      hasMore = tx.firstIndex > 0;
+      if (loadingOlder) {
+        prependOlder(tx.events); // 위로 스와이프 → 앞에 붙이고 스크롤 보존 (loadingOlder는 복원 후 해제)
+      } else {
+        events = tx.events; // 초기 tail → 교체
+        loading = false;
+      }
+    } else {
+      events = [...events, ...tx.events]; // 라이브 append (또는 구버전 브릿지 백필)
+    }
+    if (tx.done) loading = false;
+  }
+
+  /** 옛 이벤트를 앞에 붙이되, 보이는 스크롤 위치는 그대로 유지. */
+  function prependOlder(older: RenderEvent[]) {
+    const el = scrollEl;
+    const before = el?.scrollHeight ?? 0;
+    events = [...older, ...events];
+    void tick().then(() => {
+      if (el) {
+        el.scrollTop += el.scrollHeight - before; // 늘어난 높이만큼 내려 위치 보존
+        updateThumb();
+      }
+      loadingOlder = false; // 위치 복원 뒤 해제 → 즉시 재트리거 방지
     });
+  }
+
+  function loadOlder() {
+    if (!client || !selected || loadingOlder || !hasMore) return;
+    loadingOlder = true;
+    void client.loadOlder(selected, oldestIndex).catch(() => (loadingOlder = false));
   }
 
   // ── 스크롤: 열 때 바닥, 드래그 가능한 커스텀 스크롤바 ──
@@ -197,6 +239,8 @@
     const el = scrollEl;
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
+    // 위로 스와이프해서 상단 근처 도달 → 옛 청크 로드 (prepend가 위치 보존하므로 연쇄 안 됨)
+    if (scrollTop < 48 && hasMore && !loadingOlder && !loading) loadOlder();
     overflow = scrollHeight > clientHeight + 4;
     stick = scrollHeight - scrollTop - clientHeight < 120;
     if (!overflow) return;
@@ -524,6 +568,11 @@ decku</code></pre>
         <div class="scroll-wrap">
           <div id="convo-scroll" class="scroll" use:ptr bind:this={scrollEl} onscroll={updateThumb}>
             {#if loading}<p class="muted">불러오는 중…</p>{/if}
+            {#if loadingOlder}
+              <p class="muted older-hint">이전 대화 불러오는 중…</p>
+            {:else if hasMore}
+              <button class="older-btn" onclick={loadOlder}>↑ 이전 대화 더보기</button>
+            {/if}
             {#each events as ev, i (i)}
               {#if ev.kind === "title"}
                 <div class="title">{ev.title}</div>
@@ -686,6 +735,9 @@ decku</code></pre>
   .spinner.spin { animation: spin 0.7s linear infinite; }
   @keyframes spin { to { transform: rotate(360deg); } }
   .center { text-align: center; margin-top: 4rem; }
+  .older-hint { text-align: center; margin: 0.3rem 0 0.8rem; font-size: 0.8rem; }
+  .older-btn { display: block; margin: 0.2rem auto 0.9rem; padding: 0.35rem 0.9rem; border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: 999px; font-size: 0.8rem; cursor: pointer; }
+  .older-btn:hover { background: var(--surface); color: var(--text); }
   .title { text-align: center; font-weight: 700; color: var(--muted); font-size: 0.85rem; margin: 0.5rem 0 1.25rem; }
   .title::before { content: "⭐ "; }
 
