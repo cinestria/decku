@@ -51,6 +51,13 @@
     return cwd.split("/").filter(Boolean).pop() ?? cwd;
   }
 
+  // 헤더에 표시할 현재 세션 제목
+  let selectedTitle = $derived.by(() => {
+    if (!selected) return "";
+    const s = [...sessions, ...history].find((x) => x.sessionId === selected);
+    return s ? (s.title ?? cwdName(s.cwd)) : "세션";
+  });
+
   async function startScan() {
     scanError = "";
     scanning = true;
@@ -485,7 +492,12 @@
   }
 </script>
 
-<header>
+<header class:detail={selected}>
+  <!-- 모바일 세션 열림: ‹ 목록 + 제목 (iOS 내비게이션) -->
+  <span class="hnav">
+    <button class="hback" onclick={() => (selected = null)} aria-label="목록으로">‹ 목록</button>
+    <span class="htitle">{selectedTitle}</span>
+  </span>
   <!-- 모바일: 맨 왼쪽 ☰ (데스크탑은 숨김) -->
   <button class="menu-btn" aria-label="메뉴" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>☰</button>
   <a class="brand" href="/"><span class="logo">d</span>decku</a>
@@ -654,7 +666,6 @@ decku</code></pre>
       {#if !selected}
         <p class="muted center">세션을 선택하세요.</p>
       {:else}
-        <button class="back" onclick={() => (selected = null)}>‹ 목록</button>
         <div class="ptr" class:settle={!refreshing && pullY === 0} style="height:{refreshing ? 42 : pullY}px">
           <span class="spinner" class:spin={refreshing} style="transform:rotate({pullY * 4}deg);opacity:{refreshing || pullY > 4 ? 1 : 0}"></span>
         </div>
@@ -925,13 +936,21 @@ decku</code></pre>
   .qr-card button { margin-top: 0.6rem; padding: 0.5rem 1.4rem; border-radius: 10px; border: 1px solid var(--border); background: var(--surface); color: var(--text); cursor: pointer; }
   code { background: var(--surface-2); padding: 0.12rem 0.35rem; border-radius: 5px; font-size: 0.88em; }
 
-  .back { display: none; align-self: flex-start; margin: 0.5rem 0 0 0.75rem; padding: 0.3rem 0.7rem; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; cursor: pointer; font-size: 0.85rem; }
+  /* 헤더 내 세션 내비(‹ 목록 + 제목) — 모바일 세션 열렸을 때만 */
+  .hnav { display: none; align-items: center; gap: 0.1rem; min-width: 0; flex: 1; }
+  .hback { flex: none; background: none; border: 0; color: var(--accent); font-size: 0.95rem; font-weight: 500; cursor: pointer; padding: 0.25rem 0.3rem 0.25rem 0; white-space: nowrap; }
+  .htitle { font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
 
   @media (max-width: 640px) {
     .layout { grid-template-columns: 1fr; }
     /* 모바일: 목록 ↔ 대화 마스터/디테일 */
     .layout:not(.has-sel) .convo { display: none; }
     .layout.has-sel aside { display: none; }
-    .back { display: block; }
+    /* 세션 열림: 헤더를 ‹목록 + 제목 + ☰ 로 (브랜드/상태/해제 숨김) */
+    header.detail .brand,
+    header.detail .pill,
+    header.detail .status,
+    header.detail > .ghost { display: none; }
+    header.detail .hnav { display: flex; }
   }
 </style>
