@@ -329,7 +329,7 @@
 </script>
 
 <header>
-  <span class="brand"><span class="logo">d</span>decku</span>
+  <a class="brand" href="/"><span class="logo">d</span>decku</a>
   {#if connected}
     <span class="pill"><span class="dot" class:on={online}></span>{online ? "온라인" : "오프라인"}</span>
   {:else}
@@ -556,7 +556,7 @@ decku pair</code></pre>
     font-family: system-ui, -apple-system, sans-serif; background: var(--bg);
     position: sticky; top: 0; z-index: 10;
   }
-  .brand { display: flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; }
+  .brand { display: flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; color: var(--text); text-decoration: none; }
   .logo { width: 24px; height: 24px; border-radius: 7px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; }
   .pill { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--muted); padding: 0.2rem 0.6rem; background: var(--surface); border-radius: 999px; }
   .status { color: var(--muted); font-size: 0.82rem; }
