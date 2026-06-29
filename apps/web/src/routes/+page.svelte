@@ -471,6 +471,8 @@
 </script>
 
 <header>
+  <!-- 모바일: 맨 왼쪽 ☰ (데스크탑은 숨김) -->
+  <button class="menu-btn" aria-label="메뉴" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>☰</button>
   <a class="brand" href="/"><span class="logo">d</span>decku</a>
   {#if reconnecting}
     <span class="pill"><span class="dot pulse"></span>연결 중…</span>
@@ -483,7 +485,7 @@
   {#if !pairing}
     <button class="cta" onclick={startScan}>📷 페어링</button>
   {/if}
-  <!-- 데스크탑: 인라인 / 모바일: ☰ 드롭다운 -->
+  <!-- 데스크탑: 인라인 / 모바일: ☰ 왼쪽 드롭다운 -->
   <nav class="hdr-actions" class:open={menuOpen}>
     <a class="ghost nav" href="/docs" onclick={() => (menuOpen = false)}>Doc</a>
     <a class="ghost nav" href="/faq" onclick={() => (menuOpen = false)}>FAQ</a>
@@ -492,10 +494,11 @@
     {/if}
     {#if pairing}
       <button class="ghost" onclick={() => { menuOpen = false; void showPhoneQr(); }}>📱 폰 추가</button>
-      <button class="ghost" onclick={unpair}>해제</button>
     {/if}
   </nav>
-  <button class="menu-btn" aria-label="메뉴" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>☰</button>
+  {#if pairing}
+    <button class="ghost" onclick={unpair}>해제</button>
+  {/if}
 </header>
 {#if menuOpen}
   <div
@@ -772,7 +775,7 @@ decku</code></pre>
     .hdr-actions { display: none; }
     .hdr-actions.open {
       display: flex; flex-direction: column; align-items: stretch; gap: 0.3rem;
-      position: absolute; top: calc(100% + 6px); right: 0.7rem; z-index: 20;
+      position: absolute; top: calc(100% + 6px); left: 0.7rem; z-index: 20;
       min-width: 9.5rem; padding: 0.45rem; background: var(--bg);
       border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 34px rgba(0,0,0,0.22);
     }
