@@ -25,6 +25,7 @@
   let client: DeckuClient | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
+  let menuOpen = $state(false); // 모바일 헤더 ☰ 메뉴
   let origin = $state("https://decku.app"); // 설치 안내 URL (SSR 폴백)
   // decku.app(기본 도메인)이면 --url 생략, 아니면 명시. 서브커맨드 없이 실행 → 필요 시 자동 페어링 후 중계
   let pairCmd = $derived(
@@ -419,19 +420,33 @@
     <span class="status">{status}</span>
   {/if}
   <span class="spacer"></span>
-  <a class="ghost nav" href="/docs">Doc</a>
-  <a class="ghost nav" href="/faq">FAQ</a>
-  {#if !standalone && (installPrompt || isIos)}
-    <button class="ghost" onclick={installApp}>📲 웹앱 설치</button>
-  {/if}
   {#if !pairing}
     <button class="cta" onclick={startScan}>📷 페어링</button>
   {/if}
-  {#if pairing}
-    <button class="ghost" onclick={showPhoneQr}>📱 폰 추가</button>
-    <button class="ghost" onclick={unpair}>해제</button>
-  {/if}
+  <!-- 데스크탑: 인라인 / 모바일: ☰ 드롭다운 -->
+  <nav class="hdr-actions" class:open={menuOpen}>
+    <a class="ghost nav" href="/docs" onclick={() => (menuOpen = false)}>Doc</a>
+    <a class="ghost nav" href="/faq" onclick={() => (menuOpen = false)}>FAQ</a>
+    {#if !standalone && (installPrompt || isIos)}
+      <button class="ghost" onclick={() => { menuOpen = false; installApp(); }}>📲 웹앱 설치</button>
+    {/if}
+    {#if pairing}
+      <button class="ghost" onclick={() => { menuOpen = false; void showPhoneQr(); }}>📱 폰 추가</button>
+      <button class="ghost" onclick={unpair}>해제</button>
+    {/if}
+  </nav>
+  <button class="menu-btn" aria-label="메뉴" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>☰</button>
 </header>
+{#if menuOpen}
+  <div
+    class="menu-backdrop"
+    role="button"
+    tabindex="0"
+    aria-label="메뉴 닫기"
+    onclick={() => (menuOpen = false)}
+    onkeydown={(e) => e.key === "Escape" && (menuOpen = false)}
+  ></div>
+{/if}
 
 {#if qrUrl}
   <div
@@ -661,7 +676,7 @@ decku</code></pre>
   }
   .brand { display: flex; align-items: center; gap: 0.45rem; font-weight: 700; font-size: 1.05rem; letter-spacing: -0.01em; color: var(--text); text-decoration: none; }
   .logo { width: 24px; height: 24px; border-radius: 7px; background: var(--accent); color: #fff; display: grid; place-items: center; font-weight: 800; }
-  .pill { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--muted); padding: 0.2rem 0.6rem; background: var(--surface); border-radius: 999px; }
+  .pill { display: inline-flex; align-items: center; gap: 0.4rem; font-size: 0.78rem; color: var(--muted); padding: 0.2rem 0.6rem; background: var(--surface); border-radius: 999px; white-space: nowrap; }
   .status { color: var(--muted); font-size: 0.82rem; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); display: inline-block; }
   .dot.on { background: #21b35a; }
@@ -670,9 +685,26 @@ decku</code></pre>
   .spacer { margin-left: auto; }
 
   button { font-family: inherit; }
-  .ghost { font-size: 0.8rem; padding: 0.35rem 0.7rem; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; cursor: pointer; }
+  .ghost { font-size: 0.8rem; padding: 0.35rem 0.7rem; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; cursor: pointer; white-space: nowrap; }
   .ghost:hover { background: var(--surface); }
   a.nav { text-decoration: none; display: inline-flex; align-items: center; font-weight: 500; }
+
+  .hdr-actions { display: flex; align-items: center; gap: 0.5rem; }
+  .menu-btn { display: none; font-size: 1.1rem; line-height: 1; padding: 0.35rem 0.6rem; border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 8px; cursor: pointer; }
+  .menu-btn:hover { background: var(--surface); }
+  .menu-backdrop { position: fixed; inset: 0; z-index: 9; } /* 헤더(10) 아래 — 헤더 속 드롭다운은 그 위 */
+
+  @media (max-width: 640px) {
+    .menu-btn { display: inline-flex; }
+    .hdr-actions { display: none; }
+    .hdr-actions.open {
+      display: flex; flex-direction: column; align-items: stretch; gap: 0.3rem;
+      position: absolute; top: calc(100% + 6px); right: 0.7rem; z-index: 20;
+      min-width: 9.5rem; padding: 0.45rem; background: var(--bg);
+      border: 1px solid var(--border); border-radius: 12px; box-shadow: 0 10px 34px rgba(0,0,0,0.22);
+    }
+    .hdr-actions.open .ghost, .hdr-actions.open .nav { width: 100%; text-align: left; border: 0; padding: 0.5rem 0.6rem; border-radius: 8px; font-size: 0.9rem; }
+  }
   .cta { font-size: 0.8rem; padding: 0.4rem 0.8rem; border: 0; background: var(--accent); color: #fff; border-radius: 8px; cursor: pointer; font-weight: 600; white-space: nowrap; }
   .cta:hover { filter: brightness(1.05); }
   .primary { padding: 0.7rem 1.4rem; border-radius: 10px; border: 0; background: var(--accent); color: #fff; font-size: 0.95rem; font-weight: 600; cursor: pointer; }
