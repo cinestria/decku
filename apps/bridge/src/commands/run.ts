@@ -143,10 +143,11 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
         activeTails.set(cmd.sessionId, t);
       }
       const imgN = cmd.images?.length ?? 0;
-      console.log(`${DIM}↓ send ${shortId(cmd.sessionId)}: "${cmd.text.slice(0, 40)}"${imgN ? ` (+${imgN} img)` : ""}${RESET}`);
+      console.log(`${DIM}↓ send ${shortId(cmd.sessionId)}: "${cmd.text.slice(0, 40)}"${imgN ? ` (+${imgN} img)` : ""} (응답 생성 중…)${RESET}`);
       // 한 턴(응답까지)이라 시간 소요 → fire-and-forget, append는 tail이 publish
+      const t0 = Date.now();
       injectMessage(found.cwd, cmd.sessionId, cmd.text, cmd.images)
-        .then(() => console.log(`${DIM}  inject 완료 ${shortId(cmd.sessionId)}${RESET}`))
+        .then(() => console.log(`${DIM}  inject 완료 ${shortId(cmd.sessionId)} (${((Date.now() - t0) / 1000).toFixed(1)}s)${RESET}`))
         .catch((e) => {
           const msg = (e as Error).message;
           console.error(`inject 실패 ${shortId(cmd.sessionId)}:`, msg);

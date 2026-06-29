@@ -59,6 +59,8 @@ async function runClaude(cwd: string, args: string[], stdin?: string, attempt = 
   }
 }
 
+const INJECT_TIMEOUT_MS = 5 * 60 * 1000; // 응답이 이 시간 넘게 안 끝나면 멈춘 것으로 보고 종료
+
 function spawnClaude(cwd: string, args: string[], stdin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("claude", args, {
@@ -69,10 +71,24 @@ function spawnClaude(cwd: string, args: string[], stdin?: string): Promise<void>
     });
     let out = "";
     let err = "";
+    let timedOut = false;
+    const timer = setTimeout(() => {
+      timedOut = true;
+      child.kill("SIGKILL");
+    }, INJECT_TIMEOUT_MS);
     child.stdout?.on("data", (d) => (out += String(d)));
     child.stderr?.on("data", (d) => (err += String(d)));
-    child.on("error", reject);
+    child.on("error", (e) => {
+      clearTimeout(timer);
+      reject(e);
+    });
     child.on("close", (code) => {
+      clearTimeout(timer);
+      if (timedOut) {
+        return reject(
+          new Error(`응답 시간 초과(>${INJECT_TIMEOUT_MS / 60000}분). 현재 작업 중인 바로 그 세션이면 충돌할 수 있어요 — 다른 세션으로 시도해 보세요.`),
+        );
+      }
       if (code === 0) return resolve();
       // stderr 우선, 비어 있으면 stdout(JSON 에러 result)에서 사유 추출.
       const detail = (err.trim() || extractClaudeError(out) || "(출력 없음)").slice(0, 300);
