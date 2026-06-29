@@ -23,7 +23,6 @@
   let loading = $state(false);
   let draft = $state("");
   let pendingImages = $state<{ att: ImageAttachment; url: string }[]>([]);
-  let sending = $state(false);
   let client: DeckuClient | null = null;
   let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
   let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
@@ -721,13 +720,19 @@ decku</code></pre>
           </div>
         {/if}
         <form class="composer" onsubmit={send}>
-          <label class="attach" title="이미지 첨부">
-            🖼
+          <label class="attach" title="이미지 첨부" aria-label="이미지 첨부">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <rect x="3" y="3" width="18" height="18" rx="4" />
+              <circle cx="8.5" cy="8.5" r="1.6" />
+              <path d="M21 14.5l-4.5-4.5L5 21.5" />
+            </svg>
             <input type="file" accept="image/*" multiple onchange={addImages} hidden />
           </label>
-          <input bind:value={draft} placeholder="메시지 입력 (이미지 첨부 가능)…" disabled={sending} />
-          <button type="submit" disabled={(!draft.trim() && pendingImages.length === 0) || sending}>
-            {sending ? "…" : "전송"}
+          <input bind:value={draft} placeholder="메시지 입력…" />
+          <button type="submit" class="send" aria-label="전송" disabled={!draft.trim() && pendingImages.length === 0}>
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+              <path d="M12 19V5M5 12l7-7 7 7" />
+            </svg>
           </button>
         </form>
       {/if}
@@ -809,7 +814,8 @@ decku</code></pre>
   .scanner { width: 100%; max-width: 320px; border-radius: 14px; background: #000; margin: 1rem auto; }
   .err { color: var(--danger); }
 
-  .layout { display: grid; grid-template-columns: 17rem 1fr; height: calc(100vh - 50px); font-family: system-ui, sans-serif; }
+  /* dvh: 모바일 브라우저 chrome 제외한 실제 높이 → 입력바가 화면 밑으로 안 잘림 */
+  .layout { display: grid; grid-template-columns: 17rem 1fr; height: calc(100vh - 50px); height: calc(100dvh - 50px); font-family: system-ui, sans-serif; }
   aside { border-right: 1px solid var(--border); overflow-y: auto; padding: 0.5rem; background: var(--bg); }
   .tabs { display: flex; gap: 0.25rem; padding: 0.3rem; background: var(--surface); border-radius: 10px; margin-bottom: 0.5rem; }
   .tabs button { flex: 1; font-size: 0.8rem; padding: 0.4rem; border: 0; background: transparent; color: var(--muted); border-radius: 7px; cursor: pointer; font-weight: 600; }
@@ -868,15 +874,18 @@ decku</code></pre>
   .thumb img { height: 56px; border-radius: 8px; display: block; }
   .thumb .rm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: #000; color: #fff; cursor: pointer; line-height: 1; padding: 0; font-size: 0.8rem; }
 
-  .composer { display: flex; gap: 0.5rem; padding: 0.7rem 1rem; border-top: 1px solid var(--border); align-items: center; background: var(--bg); }
-  .attach { cursor: pointer; font-size: 1.25rem; user-select: none; opacity: 0.7; flex: none; }
-  .attach:hover { opacity: 1; }
-  /* min-width:0 이 없으면 input이 내용/placeholder 폭 밑으로 안 줄어 전송 버튼을 화면 밖으로 밀어 잘림 */
-  /* font-size 16px 미만이면 iOS가 포커스 시 화면을 자동 확대 → 16px 고정 */
-  .composer input { flex: 1; min-width: 0; padding: 0.55rem 0.9rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; font-size: 16px; outline: none; }
-  .composer input:focus { border-color: var(--accent); }
-  .composer button[type="submit"] { flex: none; white-space: nowrap; padding: 0.55rem 1.2rem; border-radius: 999px; border: 0; background: var(--accent); color: #fff; font-weight: 600; cursor: pointer; }
-  .composer button:disabled { opacity: 0.45; cursor: default; }
+  /* 세이프에어리어: iPhone 홈 인디케이터에 안 가리게 하단 여백 */
+  .composer { display: flex; gap: 0.5rem; padding: 0.6rem 0.85rem; padding-bottom: calc(0.6rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); align-items: center; background: var(--bg); }
+  .attach { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; color: var(--muted); cursor: pointer; }
+  .attach:hover { background: var(--surface); color: var(--text); }
+  .attach svg { width: 22px; height: 22px; }
+  /* min-width:0: input이 placeholder 폭 밑으로 줄어 버튼을 안 밀어냄. font-size 16px: iOS 포커스 자동확대 방지. 높이 버튼과 일치 */
+  .composer input { flex: 1; min-width: 0; height: 40px; padding: 0 1rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; font-size: 16px; outline: none; }
+  .composer input:focus { border-color: var(--accent); background: var(--bg); }
+  .send { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 0; background: var(--accent); color: #fff; cursor: pointer; transition: filter 0.15s, opacity 0.15s; }
+  .send svg { width: 20px; height: 20px; }
+  .send:hover:not(:disabled) { filter: brightness(1.08); }
+  .send:disabled { opacity: 0.4; cursor: default; }
 
   .muted { color: var(--muted); }
   .qr-overlay { position: fixed; inset: 0; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 50; padding: 1rem; }
