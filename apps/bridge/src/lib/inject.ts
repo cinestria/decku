@@ -39,18 +39,36 @@ function runClaude(cwd: string, args: string[], stdin?: string): Promise<void> {
   return new Promise((resolve, reject) => {
     const child = spawn("claude", args, {
       cwd,
-      stdio: [stdin ? "pipe" : "ignore", "ignore", "pipe"],
+      // stdout도 캡처 — `--output-format json`은 실패 사유를 stdout(JSON)에 쓴다.
+      stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"],
       env: process.env,
     });
+    let out = "";
     let err = "";
+    child.stdout?.on("data", (d) => (out += String(d)));
     child.stderr?.on("data", (d) => (err += String(d)));
     child.on("error", reject);
-    child.on("close", (code) =>
-      code === 0 ? resolve() : reject(new Error(`claude exit ${code}: ${err.slice(0, 200)}`)),
-    );
+    child.on("close", (code) => {
+      if (code === 0) return resolve();
+      // stderr 우선, 비어 있으면 stdout(JSON 에러 result)에서 사유 추출.
+      const detail = (err.trim() || extractClaudeError(out) || "(출력 없음)").slice(0, 300);
+      reject(new Error(`claude exit ${code}: ${detail}`));
+    });
     if (stdin && child.stdin) {
       child.stdin.write(stdin);
       child.stdin.end();
     }
   });
+}
+
+/** `--output-format json` 실패 시 stdout의 result/error 메시지를 뽑는다. */
+function extractClaudeError(out: string): string {
+  const trimmed = out.trim();
+  if (!trimmed) return "";
+  try {
+    const j = JSON.parse(trimmed) as { error?: string; result?: string; is_error?: boolean };
+    return j.error ?? j.result ?? trimmed;
+  } catch {
+    return trimmed; // JSON 아니면 원문 그대로
+  }
 }

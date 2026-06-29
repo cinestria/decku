@@ -121,7 +121,7 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
       // 한 턴(응답까지)이라 시간 소요 → fire-and-forget, append는 tail이 publish
       injectMessage(found.cwd, cmd.sessionId, cmd.text, cmd.images)
         .then(() => console.log(`${DIM}  inject 완료 ${shortId(cmd.sessionId)}${RESET}`))
-        .catch((e) => console.error("inject 실패:", (e as Error).message));
+        .catch((e) => console.error(`inject 실패 ${shortId(cmd.sessionId)}:`, (e as Error).message));
     } else if (cmd.op === "history") {
       const items = await historyList(cmd.limit ?? 40);
       await rt.publishHistory({ type: "history", items });

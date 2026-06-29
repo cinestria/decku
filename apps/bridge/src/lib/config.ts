@@ -19,7 +19,13 @@ export const CONFIG_FILE = join(DECKU_DIR, "config.json");
 
 export async function loadConfig(): Promise<BridgeConfig | null> {
   try {
-    return JSON.parse(await readFile(CONFIG_FILE, "utf8")) as BridgeConfig;
+    const c = JSON.parse(await readFile(CONFIG_FILE, "utf8")) as BridgeConfig;
+    // 옛 기본 도메인 → 현재 도메인 마이그레이션 (같은 앱, namespace·키 유지).
+    if (c.apiUrl === "https://decku.vercel.app") {
+      c.apiUrl = "https://decku.app";
+      await saveConfig(c);
+    }
+    return c;
   } catch {
     return null;
   }
