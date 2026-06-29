@@ -12,29 +12,36 @@ import { createInterface } from "node:readline";
 import type { ImageAttachment } from "@decku/shared";
 
 /**
- * 헤드리스 claude 인증 점검 — `claude whoami` 로 **토큰 0(추론 없음)** 검증.
- * `auth status`는 토큰 존재만 봐서 만료를 못 잡지만, whoami는 실제 검증해 만료 401을 잡는다.
+ * claude 로그인 여부 — `claude auth status` 로 **API 호출·세션 생성·토큰 소모 0** (로컬 자격증명만 읽음).
+ * 만료 검증은 못 함(저장된 토큰 있으면 true) → 만료는 사용 중 401(`isAuthError`)로 잡아 재로그인.
  */
-export function checkClaudeAuth(): Promise<{ ok: boolean; detail?: string }> {
+export function claudeLoggedIn(): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn("claude", ["whoami"], { stdio: ["ignore", "pipe", "pipe"], env: process.env });
+    const child = spawn("claude", ["auth", "status"], { stdio: ["ignore", "pipe", "pipe"], env: process.env });
     let out = "";
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
-      resolve({ ok: false, detail: "시간 초과" });
-    }, 20000);
+      resolve(false);
+    }, 15000);
     child.stdout?.on("data", (d) => (out += String(d)));
-    child.stderr?.on("data", (d) => (out += String(d)));
-    child.on("error", (e) => {
+    child.on("error", () => {
       clearTimeout(timer);
-      resolve({ ok: false, detail: `claude 실행 실패: ${e.message}` });
+      resolve(false);
     });
     child.on("close", () => {
       clearTimeout(timer);
-      const bad = /401|failed to authenticate|invalid authentication|not logged in|logged out|no credentials/i.test(out);
-      resolve(bad ? { ok: false, detail: out.trim().slice(0, 160) } : { ok: true });
+      try {
+        resolve((JSON.parse(out.trim()) as { loggedIn?: boolean }).loggedIn === true);
+      } catch {
+        resolve(false);
+      }
     });
   });
+}
+
+/** claude 출력이 인증 만료/무효(401) 에러인가 — 토큰 삭제+재로그인 트리거용. */
+export function isAuthError(msg: string): boolean {
+  return /invalid authentication|authentication credentials|failed to authenticate|401/i.test(msg);
 }
 
 /**

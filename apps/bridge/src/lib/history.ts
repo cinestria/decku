@@ -45,14 +45,18 @@ async function listTranscripts(): Promise<FileEntry[]> {
 }
 
 /** 한 transcript에서 cwd(첫 등장)와 마지막 ai-title을 한 번에 추출. */
-async function readMeta(path: string): Promise<{ cwd?: string; title?: string }> {
+async function readMeta(
+  path: string,
+): Promise<{ cwd?: string; title?: string; userMsgs: number; firstUser?: string }> {
   let cwd: string | undefined;
   let title: string | undefined;
+  let userMsgs = 0;
+  let firstUser: string | undefined;
   let stream;
   try {
     stream = createReadStream(path, { encoding: "utf8" });
   } catch {
-    return {};
+    return { userMsgs: 0 };
   }
   const rl = createInterface({ input: stream, crlfDelay: Infinity });
   try {
@@ -61,6 +65,17 @@ async function readMeta(path: string): Promise<{ cwd?: string; title?: string }>
         try {
           const d = JSON.parse(line) as { cwd?: unknown };
           if (typeof d.cwd === "string") cwd = d.cwd;
+        } catch {
+          /* partial */
+        }
+      }
+      if (line.includes('"type":"user"')) {
+        try {
+          const d = JSON.parse(line) as { type?: string; message?: { content?: unknown } };
+          if (d.type === "user") {
+            userMsgs++;
+            if (firstUser === undefined && typeof d.message?.content === "string") firstUser = d.message.content;
+          }
         } catch {
           /* partial */
         }
@@ -80,7 +95,15 @@ async function readMeta(path: string): Promise<{ cwd?: string; title?: string }>
     rl.close();
     stream.close();
   }
-  return { cwd, title };
+  return { cwd, title, userMsgs, firstUser };
+}
+
+/** decku가 만든 probe 세션(whoami/ok 등 단발)인가 → 히스토리에서 제외. */
+function isProbeSession(meta: { title?: string; userMsgs: number; firstUser?: string }): boolean {
+  if (meta.title) return false; // 제목 있으면 실제 세션
+  if (meta.userMsgs > 1) return false; // 여러 턴이면 실제
+  const t = (meta.firstUser ?? "").trim().toLowerCase();
+  return t === "whoami" || t === "ok" || t === "hi" || t.startsWith("reply with") || t.startsWith("say ");
 }
 
 /** sessionId로 transcript 위치/cwd 찾기 (live가 아닌 과거 세션 load/send용). */
@@ -94,19 +117,22 @@ export async function findTranscript(
 }
 
 export async function historyList(limit = 40): Promise<SessionListItem[]> {
-  const recent = (await listTranscripts()).sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit);
+  // probe가 걸러질 수 있으니 여유 후보를 병렬로 읽고 필터 후 limit
+  const candidates = (await listTranscripts()).sort((a, b) => b.mtimeMs - a.mtimeMs).slice(0, limit * 2);
   const liveIds = new Set((await scanSessions()).map((s) => s.sessionId));
-  return Promise.all(
-    recent.map(async (e): Promise<SessionListItem> => {
-      const meta = await readMeta(e.path);
-      return {
-        sessionId: e.sessionId,
-        pid: 0,
-        cwd: meta.cwd ?? "(unknown)",
-        live: liveIds.has(e.sessionId),
-        startedAt: Math.round(e.mtimeMs),
-        ...(meta.title ? { title: meta.title } : {}),
-      };
-    }),
-  );
+  const metas = await Promise.all(candidates.map(async (e) => ({ e, meta: await readMeta(e.path) })));
+  const items: SessionListItem[] = [];
+  for (const { e, meta } of metas) {
+    if (items.length >= limit) break;
+    if (isProbeSession(meta)) continue; // whoami/ok 등 decku probe 제외
+    items.push({
+      sessionId: e.sessionId,
+      pid: 0,
+      cwd: meta.cwd ?? "(unknown)",
+      live: liveIds.has(e.sessionId),
+      startedAt: Math.round(e.mtimeMs),
+      ...(meta.title ? { title: meta.title } : {}),
+    });
+  }
+  return items;
 }

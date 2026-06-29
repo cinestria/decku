@@ -15,7 +15,7 @@ import { loadConfig, saveConfig, type BridgeConfig } from "../lib/config.js";
 import { createPairing, printPairing, pairUrl } from "./pair.js";
 import { ReplayGuard } from "../lib/replay.js";
 import { BridgeRealtime } from "../lib/realtime.js";
-import { injectMessage, checkClaudeAuth, claudeSetupToken } from "../lib/inject.js";
+import { injectMessage, claudeLoggedIn, claudeSetupToken, isAuthError } from "../lib/inject.js";
 import { TitleCache } from "../lib/titles.js";
 import { historyList, findTranscript } from "../lib/history.js";
 
@@ -53,36 +53,63 @@ export async function run(argv: string[] = []): Promise<void> {
   return runRealtime(cfg, argv);
 }
 
-/** realtime 연결 전 claude 인증 확인. 만료/미인증이면 (TTY에서) setup-token으로 토큰 발급·저장 후 재확인. */
+/**
+ * realtime 연결 전 인증 준비. (whoami 같은 토큰·세션 낭비 없이)
+ *  1) decku 저장 토큰 있으면 적용하고 진행(검증 X — 만료면 사용 중 401로 잡음)
+ *  2) claude 자체 로그인돼 있으면(auth status, 로컬·토큰0) 그대로 사용
+ *  3) 둘 다 없으면 TTY에서 setup-token
+ */
 async function ensureClaudeAuth(cfg: BridgeConfig): Promise<void> {
-  process.stdout.write(`${DIM}claude 인증 확인 중…${RESET} `);
-  let auth = await checkClaudeAuth();
-  if (auth.ok) {
-    console.log(`${DIM}✓${RESET}`);
+  if (cfg.oauthToken) {
+    process.env.CLAUDE_CODE_OAUTH_TOKEN = cfg.oauthToken;
     return;
   }
-  console.log(`\n${BOLD}⚠ claude 인증이 필요합니다${RESET} ${DIM}(${auth.detail})${RESET}`);
+  if (await claudeLoggedIn()) return;
 
   if (process.stdin.isTTY) {
-    console.log(`${DIM}'claude setup-token' 으로 토큰을 발급합니다 — 브라우저에서 완료하세요…${RESET}\n`);
+    console.log(`${BOLD}⚠ claude 로그인이 필요합니다${RESET} ${DIM}— setup-token 진행…${RESET}\n`);
     const token = await claudeSetupToken();
     if (token) {
-      process.env.CLAUDE_CODE_OAUTH_TOKEN = token; // 현재 프로세스의 claude -p에 즉시 적용
+      process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
       cfg.oauthToken = token;
-      await saveConfig(cfg); // ~/.decku/config.json 에 저장 → 이후 자동 적용
-      console.log(`${DIM}토큰을 저장했어요 (~/.decku) — 앞으로 자동 적용됩니다.${RESET}`);
-    }
-    auth = await checkClaudeAuth();
-    if (auth.ok) {
-      console.log(`${DIM}✓ 인증 완료 — 메시지 전송 가능${RESET}\n`);
+      await saveConfig(cfg);
+      console.log(`${DIM}✓ 로그인 완료 — 토큰 저장(~/.decku), 앞으로 자동 적용${RESET}\n`);
       return;
     }
   }
-  // 비TTY(launchd 등)이거나 실패 → 읽기는 되니 계속 진행, 안내만
   console.log(
-    `${BOLD}⚠ 인증 안 됨 — 읽기·목록은 되지만 메시지 전송은 안 됩니다.${RESET}\n` +
-      `${DIM}   ${RESET}${BOLD}claude setup-token${RESET}${DIM} 의 토큰을  ${RESET}${BOLD}export CLAUDE_CODE_OAUTH_TOKEN=...${RESET}${DIM} 설정 후 decku 재시작.${RESET}\n`,
+    `${BOLD}⚠ 미인증 — 읽기·목록은 되지만 메시지 전송은 안 됩니다.${RESET}\n` +
+      `${DIM}   ${RESET}${BOLD}claude setup-token${RESET}${DIM} 후 decku 재시작.${RESET}\n`,
   );
+}
+
+/** 사용 중 401 발생 → 무효 토큰 삭제 + (TTY면) 재로그인. */
+let reauthing = false;
+async function handleAuthFailure(cfg: BridgeConfig): Promise<void> {
+  if (reauthing) return;
+  reauthing = true;
+  try {
+    delete process.env.CLAUDE_CODE_OAUTH_TOKEN;
+    if (cfg.oauthToken) {
+      delete cfg.oauthToken;
+      await saveConfig(cfg);
+    }
+    console.warn(`\n${BOLD}⚠ claude 토큰 무효(401) — 삭제했습니다.${RESET}`);
+    if (process.stdin.isTTY) {
+      console.log(`${DIM}재로그인을 진행합니다…${RESET}\n`);
+      const token = await claudeSetupToken();
+      if (token) {
+        process.env.CLAUDE_CODE_OAUTH_TOKEN = token;
+        cfg.oauthToken = token;
+        await saveConfig(cfg);
+        console.log(`${DIM}✓ 재로그인 완료 — 다시 보내보세요.${RESET}\n`);
+      }
+    } else {
+      console.log(`${DIM}claude setup-token 후 decku 재시작하세요.${RESET}\n`);
+    }
+  } finally {
+    reauthing = false;
+  }
 }
 
 // ───────────────────────── realtime 모드 ─────────────────────────
@@ -190,6 +217,7 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
         .catch((e) => {
           const msg = (e as Error).message;
           console.error(`inject 실패 ${shortId(cmd.sessionId)}:`, msg);
+          if (isAuthError(msg)) void handleAuthFailure(cfg); // 토큰 무효 → 삭제+재로그인
           // 웹에도 알림 (대화에 일시적 경고 — jsonl엔 없어 새로고침 시 사라짐)
           void rt
             .publishTx({
