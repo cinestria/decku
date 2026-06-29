@@ -494,8 +494,14 @@ decku</code></pre>
                     {#each ev.blocks as b}
                       {#if b.type === "text"}<p>{b.text}</p>
                       {:else if b.type === "thinking"}<p class="thinking">{b.text}</p>
-                      {:else if b.type === "tool_use"}<p class="tool">⚙ {b.name}</p>
-                      {:else if b.type === "tool_result"}<p class="tool">↳ {b.text.slice(0, 300)}</p>
+                      {:else if b.type === "tool_use"}<p class="tool">⚙ {b.name}{b.summary ? ` ${b.summary}` : ""}</p>
+                      {:else if b.type === "tool_result"}
+                        {#if b.text.trim()}
+                          <details class="toolres">
+                            <summary>↳ 결과 ({b.text.split("\n").length}줄)</summary>
+                            <pre>{b.text.slice(0, 4000)}</pre>
+                          </details>
+                        {/if}
                       {:else if b.type === "image"}<p class="tool">🖼 이미지</p>{/if}
                     {/each}
                   </div>
@@ -644,6 +650,12 @@ decku</code></pre>
   .thinking { color: var(--muted); font-style: italic; font-size: 0.92em; }
   .tool { color: #c07a00; font-family: ui-monospace, monospace; font-size: 0.82rem; }
   @media (prefers-color-scheme: dark) { .tool { color: #e0a64d; } }
+  .toolres { margin: 0.2rem 0; }
+  .toolres summary { color: var(--muted); font-family: ui-monospace, monospace; font-size: 0.8rem; cursor: pointer; list-style: none; }
+  .toolres summary::-webkit-details-marker { display: none; }
+  .toolres summary::before { content: "▸ "; }
+  .toolres[open] summary::before { content: "▾ "; }
+  .toolres pre { margin: 0.35rem 0 0; padding: 0.5rem 0.7rem; background: var(--surface-2); border-radius: 8px; font-size: 0.76rem; line-height: 1.45; overflow-x: auto; white-space: pre-wrap; word-break: break-word; max-height: 16rem; overflow-y: auto; color: var(--muted); }
 
   .thumbs { display: flex; gap: 0.4rem; padding: 0.5rem 1rem 0; flex-wrap: wrap; }
   .thumb { position: relative; }

@@ -17,7 +17,7 @@ function blockToText(b: ContentBlock): string {
     case "thinking":
       return `${DIM}(thinking) ${b.text}${RESET}`;
     case "tool_use":
-      return `${YELLOW}⚙ ${b.name}${RESET}`;
+      return `${YELLOW}⚙ ${b.name}${b.summary ? ` ${b.summary}` : ""}${RESET}`;
     case "tool_result":
       return `${DIM}↳ ${b.text.slice(0, 200)}${RESET}`;
     case "image":

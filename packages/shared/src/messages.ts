@@ -23,7 +23,7 @@ export type EncryptedEnvelope = z.infer<typeof EncryptedEnvelopeSchema>;
 const ContentBlockSchema = z.discriminatedUnion("type", [
   z.object({ type: z.literal("text"), text: z.string() }),
   z.object({ type: z.literal("thinking"), text: z.string() }),
-  z.object({ type: z.literal("tool_use"), name: z.string(), id: z.string().optional() }),
+  z.object({ type: z.literal("tool_use"), name: z.string(), id: z.string().optional(), summary: z.string().optional() }),
   z.object({ type: z.literal("tool_result"), text: z.string() }),
   z.object({ type: z.literal("image") }),
   z.object({ type: z.literal("unknown"), raw: z.string() }),

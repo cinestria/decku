@@ -11,7 +11,7 @@
 export type ContentBlock =
   | { type: "text"; text: string }
   | { type: "thinking"; text: string }
-  | { type: "tool_use"; name: string; id?: string }
+  | { type: "tool_use"; name: string; id?: string; summary?: string }
   | { type: "tool_result"; text: string }
   | { type: "image" }
   | { type: "unknown"; raw: string };
@@ -25,6 +25,37 @@ export type RenderEvent =
       timestamp?: string;
     }
   | { kind: "title"; title: string; sessionId?: string };
+
+/** tool_use.input → 한 줄 요약(파일명·명령어 등). 데스크탑 앱처럼 "Edit README.md" 식으로 보여주려고. */
+function summarizeToolInput(name: string, input: unknown): string | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const i = input as Record<string, unknown>;
+  const base = (p: unknown): string | undefined =>
+    typeof p === "string" && p ? (p.split("/").filter(Boolean).pop() ?? p) : undefined;
+  const trunc = (s: unknown, n: number): string | undefined =>
+    typeof s === "string" && s ? (s.length > n ? s.slice(0, n) + "…" : s) : undefined;
+  switch (name) {
+    case "Read":
+    case "Edit":
+    case "MultiEdit":
+    case "Write":
+    case "NotebookEdit":
+      return base(i["file_path"] ?? i["path"] ?? i["notebook_path"]);
+    case "Bash":
+      return trunc(typeof i["command"] === "string" ? i["command"].replace(/\s+/g, " ").trim() : undefined, 60);
+    case "Grep":
+    case "Glob":
+      return trunc(i["pattern"], 40);
+    case "Task":
+      return trunc(i["description"] ?? i["subagent_type"], 40);
+    case "WebFetch":
+      return trunc(i["url"], 50);
+    case "WebSearch":
+      return trunc(i["query"], 50);
+    default:
+      return base(i["file_path"]); // 알 수 없는 툴도 file_path 있으면 표시
+  }
+}
 
 /** message.content (string | block[]) 를 ContentBlock[] 로 정규화. */
 function normalizeContent(content: unknown): ContentBlock[] {
@@ -44,13 +75,17 @@ function normalizeContent(content: unknown): ContentBlock[] {
       case "thinking":
         out.push({ type: "thinking", text: String(b["thinking"] ?? b["text"] ?? "") });
         break;
-      case "tool_use":
+      case "tool_use": {
+        const name = String(b["name"] ?? "tool");
+        const summary = summarizeToolInput(name, b["input"]);
         out.push({
           type: "tool_use",
-          name: String(b["name"] ?? "tool"),
+          name,
           ...(typeof b["id"] === "string" ? { id: b["id"] } : {}),
+          ...(summary ? { summary } : {}),
         });
         break;
+      }
       case "tool_result": {
         // tool_result.content 도 string | block[] 일 수 있음
         const c = b["content"];
