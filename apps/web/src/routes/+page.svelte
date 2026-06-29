@@ -13,9 +13,13 @@
   let online = $state(false); // 브릿지 heartbeat 수신 중인가
   let lastSeen = 0; // 마지막 세션목록 수신 시각 (비반응)
   let sessions = $state<SessionListItem[]>([]);
-  let view = $state<"live" | "history">("live");
   let history = $state<SessionListItem[]>([]);
   let historyLoading = $state(false);
+  // 라이브에 이미 있는 세션은 히스토리에서 제외(중복 방지)
+  let pastSessions = $derived.by(() => {
+    const liveIds = new Set(sessions.map((s) => s.sessionId));
+    return history.filter((h) => !liveIds.has(h.sessionId));
+  });
   let selected = $state<string | null>(null);
   // 낙관적 전송용 마커(_id 있으면 내가 방금 보낸 것: _pending=스피너, 확인=✓, _failed=⚠)
   type UiEvent = RenderEvent & { _id?: string; _pending?: boolean; _failed?: boolean };
@@ -149,6 +153,7 @@
     });
     connected = true;
     status = `namespace ${p.ns.slice(0, 8)}…`;
+    loadHistory(); // 활성 외 과거 세션도 목록에 함께 표시
   }
 
   /** 화면 복귀 시: 한 번이라도 연결됐었는데 heartbeat가 끊겼으면(=오프라인) 재연결. */
@@ -324,11 +329,10 @@
         await loadSession(selected);
         const t0 = Date.now();
         while (loading && Date.now() - t0 < 5000) await new Promise((r) => setTimeout(r, 100));
-      } else if (view === "history") {
-        await client.requestHistory(40);
-        await new Promise((r) => setTimeout(r, 600));
       } else {
-        await new Promise((r) => setTimeout(r, 400)); // live는 heartbeat가 갱신
+        // 목록: 히스토리 다시 요청(라이브는 heartbeat가 갱신)
+        await client.requestHistory(40);
+        await new Promise((r) => setTimeout(r, 500));
       }
     } finally {
       refreshing = false;
@@ -373,13 +377,10 @@
     };
   }
 
-  function openHistory() {
+  function loadHistory() {
     if (!client) return;
-    view = "history";
-    if (history.length === 0) {
-      historyLoading = true;
-      void client.requestHistory(40);
-    }
+    historyLoading = true;
+    void client.requestHistory(40);
   }
 
   async function addImages(e: Event) {
@@ -634,31 +635,32 @@ decku</code></pre>
 {:else}
   <div class="layout" class:has-sel={selected}>
     <aside>
-      <div class="tabs">
-        <button class:sel={view === "live"} onclick={() => (view = "live")}>● Live {sessions.length}</button>
-        <button class:sel={view === "history"} onclick={openHistory}>기록</button>
-      </div>
+      {#if connected && !online}
+        <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku run</code> 확인.</p>
+      {/if}
 
-      {#if view === "live"}
-        {#if connected && !online}
-          <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku run</code> 확인.</p>
-        {:else if sessions.length === 0}
-          <p class="muted">대기 중…</p>
-        {/if}
+      {#if sessions.length}
+        <div class="sec">활성 {sessions.length}</div>
         {#each sessions as s (s.sessionId)}
+          <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
+            <span class="cwd"><span class="livedot"></span>{s.title ?? cwdName(s.cwd)}</span>
+            <span class="path">{cwdName(s.cwd)}</span>
+          </button>
+        {/each}
+      {/if}
+
+      {#if pastSessions.length || historyLoading}
+        <div class="sec">최근 {#if historyLoading}<span class="muted">…</span>{/if}</div>
+        {#each pastSessions as s (s.sessionId)}
           <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
             <span class="cwd">{s.title ?? cwdName(s.cwd)}</span>
             <span class="path">{cwdName(s.cwd)}</span>
           </button>
         {/each}
-      {:else}
-        {#if historyLoading}<p class="muted">기록 불러오는 중…</p>{/if}
-        {#each history as s (s.sessionId)}
-          <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
-            <span class="cwd">{s.live ? "● " : ""}{s.title ?? cwdName(s.cwd)}</span>
-            <span class="path">{cwdName(s.cwd)}</span>
-          </button>
-        {/each}
+      {/if}
+
+      {#if !sessions.length && !pastSessions.length && !historyLoading}
+        <p class="muted">{online ? "세션이 없어요." : "대기 중…"}</p>
       {/if}
     </aside>
 
@@ -852,9 +854,8 @@ decku</code></pre>
   /* dvh: 모바일 브라우저 chrome 제외한 실제 높이 → 입력바가 화면 밑으로 안 잘림 */
   .layout { display: grid; grid-template-columns: 17rem 1fr; height: calc(100vh - 50px); height: calc(100dvh - 50px); font-family: system-ui, sans-serif; }
   aside { border-right: 1px solid var(--border); overflow-y: auto; padding: 0.5rem; background: var(--bg); }
-  .tabs { display: flex; gap: 0.25rem; padding: 0.3rem; background: var(--surface); border-radius: 10px; margin-bottom: 0.5rem; }
-  .tabs button { flex: 1; font-size: 0.8rem; padding: 0.4rem; border: 0; background: transparent; color: var(--muted); border-radius: 7px; cursor: pointer; font-weight: 600; }
-  .tabs button.sel { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,0.08); }
+  .sec { font-size: 0.72rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; padding: 0.5rem 0.6rem 0.25rem; }
+  .livedot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #21b35a; margin-right: 0.4rem; vertical-align: 1px; }
 
   .session { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--text); padding: 0.55rem 0.6rem; border-radius: 10px; cursor: pointer; }
   .session:hover { background: var(--surface); }
