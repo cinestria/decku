@@ -8,6 +8,7 @@
  * 주의: cwd는 반드시 그 세션의 cwd여야 transcript 경로(enc-cwd)가 일치한다.
  */
 import { spawn } from "node:child_process";
+import { createInterface } from "node:readline";
 import type { ImageAttachment } from "@decku/shared";
 
 /**
@@ -37,28 +38,24 @@ export function checkClaudeAuth(): Promise<{ ok: boolean; detail?: string }> {
 }
 
 /**
- * `claude setup-token` 대화형 실행 (TTY) — 헤드리스용 장기 OAuth 토큰 발급.
- * setup-token은 토큰을 저장하지 않고 출력만 하므로, 출력을 다시 보여주면서 `sk-ant-oat…` 토큰을 캡처해 반환.
+ * `claude setup-token` — 헤드리스용 장기 OAuth 토큰 발급.
+ * 깨끗한 TUI(inherit)로 실행해 사용자가 브라우저 로그인 + 토큰 확인 → 그 토큰을 붙여넣게 받아 반환.
+ * (stdout을 pipe하면 Ink TUI가 화면을 도배하므로 inherit + paste 방식)
  */
-export function claudeSetupToken(): Promise<string | null> {
-  return new Promise((resolve) => {
-    // stdin은 inherit(입력), stdout·stderr는 pipe해서 토큰 캡처 + 그대로 재출력(사용자가 흐름·토큰을 봄)
-    const child = spawn("claude", ["setup-token"], { stdio: ["inherit", "pipe", "pipe"], env: process.env });
-    let buf = "";
-    child.stdout?.on("data", (d) => {
-      buf += String(d);
-      process.stdout.write(d);
-    });
-    child.stderr?.on("data", (d) => {
-      buf += String(d);
-      process.stderr.write(d);
-    });
-    child.on("error", () => resolve(null));
-    child.on("close", () => {
-      const m = buf.match(/sk-ant-oat\d+-[A-Za-z0-9_-]+/);
-      resolve(m ? m[0] : null);
-    });
+export async function claudeSetupToken(): Promise<string | null> {
+  await new Promise<void>((resolve) => {
+    const child = spawn("claude", ["setup-token"], { stdio: "inherit", env: process.env });
+    child.on("error", () => resolve());
+    child.on("close", () => resolve());
   });
+  // setup-token이 보여준 sk-ant-oat… 토큰을 붙여넣게 받음
+  const rl = createInterface({ input: process.stdin, output: process.stdout });
+  const ans = await new Promise<string>((resolve) =>
+    rl.question("\n위에 나온 토큰(sk-ant-oat…)을 붙여넣고 Enter (건너뛰려면 그냥 Enter): ", resolve),
+  );
+  rl.close();
+  const m = ans.match(/sk-ant-oat\d+-[A-Za-z0-9_-]+/);
+  return m ? m[0] : null;
 }
 
 export function injectMessage(
