@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "description": "웹앱에서 Claude Desktop 세션을 보고 조종하는 멀티테넌트 원격 제어 (E2EE)",
+  "license": "MIT",
   "type": "module",
   "scripts": {
     "build": "pnpm -r build",
