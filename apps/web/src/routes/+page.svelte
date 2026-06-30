@@ -25,8 +25,18 @@
     if (!q) return true;
     return ((s.title ?? "") + " " + s.cwd).toLowerCase().includes(q);
   };
-  let liveShown = $derived(sessions.filter(matchQ));
-  let pastShown = $derived(pastSessions.filter(matchQ));
+  let pinSet = $derived(new Set(pinned));
+  let liveIdSet = $derived(new Set(sessions.map((s) => s.sessionId)));
+  // 고정된 세션(라이브+히스토리에서 찾아 핀 순서대로)
+  let pinnedShown = $derived.by(() => {
+    const byId = new Map<string, SessionListItem>();
+    for (const s of [...sessions, ...history]) if (!byId.has(s.sessionId)) byId.set(s.sessionId, s);
+    return pinned
+      .map((id) => byId.get(id))
+      .filter((s): s is SessionListItem => !!s && matchQ(s));
+  });
+  let liveShown = $derived(sessions.filter((s) => !pinSet.has(s.sessionId) && matchQ(s)));
+  let pastShown = $derived(pastSessions.filter((s) => !pinSet.has(s.sessionId) && matchQ(s)));
   // 새 세션 cwd 후보(기존 세션들의 폴더)
   let cwdOptions = $derived([...new Set([...sessions, ...history].map((s) => s.cwd))].filter((c) => c && c !== "(unknown)"));
   let selected = $state<string | null>(null);
@@ -43,6 +53,21 @@
   let qrUrl = $state<string | null>(null); // QR 오버레이 (폰에서 열기)
   let menuOpen = $state(false); // 모바일 헤더 ☰ 메뉴
   let query = $state(""); // 세션 검색
+  let pinned = $state<string[]>([]); // 고정한 세션 id (localStorage)
+  function loadPins() {
+    try {
+      pinned = JSON.parse(localStorage.getItem("decku.pins") ?? "[]") as string[];
+    } catch {
+      pinned = [];
+    }
+  }
+  function isPinned(id: string): boolean {
+    return pinned.includes(id);
+  }
+  function togglePin(id: string) {
+    pinned = isPinned(id) ? pinned.filter((p) => p !== id) : [...pinned, id];
+    localStorage.setItem("decku.pins", JSON.stringify(pinned));
+  }
   // 새 세션 만들기
   let newOpen = $state(false);
   let newCwd = $state("");
@@ -121,6 +146,7 @@
 
   onMount(async () => {
     origin = location.origin;
+    loadPins();
     // PWA 설치 가능 감지
     isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     standalone =
@@ -740,31 +766,44 @@ decku</code></pre>
         <input class="search" placeholder="검색…" bind:value={query} />
       </div>
 
+      {#snippet row(s)}
+        <div class="session-wrap" class:active={selected === s.sessionId}>
+          <button class="session" onclick={() => open(s.sessionId)}>
+            <span class="cwd">{#if liveIdSet.has(s.sessionId)}<span class="livedot"></span>{/if}{s.title ?? cwdName(s.cwd)}</span>
+            <span class="path">{cwdName(s.cwd)}</span>
+          </button>
+          <button
+            class="pin-btn"
+            class:on={isPinned(s.sessionId)}
+            title={isPinned(s.sessionId) ? "고정 해제" : "고정"}
+            aria-label="고정"
+            onclick={(e) => {
+              e.stopPropagation();
+              togglePin(s.sessionId);
+            }}>📌</button>
+        </div>
+      {/snippet}
+
       {#if connected && !online}
         <p class="offline-hint">브릿지가 꺼져 있어요. Mac에서 <code>decku run</code> 확인.</p>
       {/if}
 
+      {#if pinnedShown.length}
+        <div class="sec">고정됨</div>
+        {#each pinnedShown as s (s.sessionId)}{@render row(s)}{/each}
+      {/if}
+
       {#if liveShown.length}
         <div class="sec">활성 {liveShown.length}</div>
-        {#each liveShown as s (s.sessionId)}
-          <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
-            <span class="cwd"><span class="livedot"></span>{s.title ?? cwdName(s.cwd)}</span>
-            <span class="path">{cwdName(s.cwd)}</span>
-          </button>
-        {/each}
+        {#each liveShown as s (s.sessionId)}{@render row(s)}{/each}
       {/if}
 
       {#if pastShown.length || historyLoading}
         <div class="sec">최근 {#if historyLoading}<span class="muted">…</span>{/if}</div>
-        {#each pastShown as s (s.sessionId)}
-          <button class="session" class:active={selected === s.sessionId} onclick={() => open(s.sessionId)}>
-            <span class="cwd">{s.title ?? cwdName(s.cwd)}</span>
-            <span class="path">{cwdName(s.cwd)}</span>
-          </button>
-        {/each}
+        {#each pastShown as s (s.sessionId)}{@render row(s)}{/each}
       {/if}
 
-      {#if !liveShown.length && !pastShown.length && !historyLoading}
+      {#if !pinnedShown.length && !liveShown.length && !pastShown.length && !historyLoading}
         <p class="muted">{query ? "검색 결과 없음" : online ? "세션이 없어요." : "대기 중…"}</p>
       {/if}
     </aside>
@@ -979,11 +1018,16 @@ decku</code></pre>
   .nbtns { display: flex; justify-content: flex-end; gap: 0.5rem; margin-top: 0.9rem; }
   .livedot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; background: #21b35a; margin-right: 0.4rem; vertical-align: 1px; }
 
-  .session { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--text); padding: 0.55rem 0.6rem; border-radius: 10px; cursor: pointer; }
-  .session:hover { background: var(--surface); }
-  .session.active { background: var(--accent-weak); }
+  .session-wrap { position: relative; border-radius: 10px; }
+  .session-wrap:hover { background: var(--surface); }
+  .session-wrap.active { background: var(--accent-weak); }
+  .session-wrap.active:hover { background: var(--accent-weak); }
+  .session { display: block; width: 100%; text-align: left; border: 0; background: none; color: var(--text); padding: 0.55rem 1.9rem 0.55rem 0.6rem; border-radius: 10px; cursor: pointer; }
   .session .cwd { display: block; font-weight: 600; font-size: 0.9rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
   .session .path { display: block; color: var(--muted); font-size: 0.72rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pin-btn { position: absolute; right: 0.3rem; top: 50%; transform: translateY(-50%); width: 26px; height: 26px; border: 0; background: none; cursor: pointer; font-size: 0.85rem; line-height: 1; opacity: 0.22; border-radius: 7px; filter: grayscale(1); }
+  .pin-btn:hover { opacity: 0.6; background: var(--surface-2); }
+  .pin-btn.on { opacity: 1; filter: none; }
   .offline-hint { color: var(--danger); font-size: 0.78rem; padding: 0.5rem 0.6rem; background: color-mix(in srgb, var(--danger) 10%, transparent); border-radius: 8px; }
 
   .convo { display: flex; flex-direction: column; overflow: hidden; background: var(--bg); }
