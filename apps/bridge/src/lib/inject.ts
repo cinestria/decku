@@ -118,9 +118,11 @@ export function injectMessage(
   sessionId: string,
   text: string,
   images?: ImageAttachment[],
+  mode?: string,
 ): Promise<void> {
+  const perm = mode && mode !== "default" ? ["--permission-mode", mode] : [];
   if (!images || images.length === 0) {
-    return runClaude(cwd, ["-p", text, "--resume", sessionId, "--output-format", "json"], undefined, sessionId);
+    return runClaude(cwd, ["-p", text, "--resume", sessionId, "--output-format", "json", ...perm], undefined, sessionId);
   }
 
   // 이미지 → stream-json 입력 (Messages API content 블록)
@@ -134,7 +136,7 @@ export function injectMessage(
   return runClaude(
     cwd,
     // -p + stream-json 출력은 claude가 --verbose 를 요구함
-    ["-p", "--resume", sessionId, "--input-format", "stream-json", "--output-format", "stream-json", "--verbose"],
+    ["-p", "--resume", sessionId, "--input-format", "stream-json", "--output-format", "stream-json", "--verbose", ...perm],
     line,
     sessionId,
   );

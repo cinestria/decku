@@ -74,6 +74,20 @@
   let newText = $state("");
   let newBusy = $state(false);
   let newError = $state("");
+  // 권한 모드 (claude --permission-mode)
+  type PermMode = "default" | "acceptEdits" | "bypassPermissions" | "plan";
+  let permMode = $state<PermMode>("default");
+  const permModes: PermMode[] = ["default", "acceptEdits", "bypassPermissions", "plan"];
+  const permLabel: Record<PermMode, string> = {
+    default: "기본",
+    acceptEdits: "편집 자동",
+    bypassPermissions: "자동 실행",
+    plan: "계획",
+  };
+  function setPermMode(m: PermMode) {
+    permMode = m;
+    localStorage.setItem("decku.permmode", m);
+  }
   let origin = $state("https://decku.app"); // 설치 안내 URL (SSR 폴백)
   // decku.app(기본 도메인)이면 --url 생략, 아니면 명시. 서브커맨드 없이 실행 → 필요 시 자동 페어링 후 중계
   let pairCmd = $derived(
@@ -147,6 +161,7 @@
   onMount(async () => {
     origin = location.origin;
     loadPins();
+    permMode = (localStorage.getItem("decku.permmode") as PermMode) ?? "default";
     // PWA 설치 가능 감지
     isIos = /iphone|ipad|ipod/i.test(navigator.userAgent);
     standalone =
@@ -570,7 +585,7 @@
     if (typeof Notification !== "undefined" && Notification.permission === "default") void Notification.requestPermission();
 
     try {
-      await client.sendChat(selected, text, imgs);
+      await client.sendChat(selected, text, imgs, permMode);
       // 안전망: 오래도록 확인 안 되면(주입 실패 등) 스피너 → ⚠
       setTimeout(() => {
         const p = events.find((e) => e._id === id && e._pending);
@@ -901,6 +916,11 @@ decku</code></pre>
             {/each}
           </div>
         {/if}
+        <div class="permbar">
+          {#each permModes as m}
+            <button type="button" class="permpill" class:on={permMode === m} onclick={() => setPermMode(m)}>{permLabel[m]}</button>
+          {/each}
+        </div>
         <form class="composer" onsubmit={send}>
           <label class="attach" title="이미지 첨부" aria-label="이미지 첨부">
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
@@ -1082,6 +1102,11 @@ decku</code></pre>
   .thumb { position: relative; }
   .thumb img { height: 56px; border-radius: 8px; display: block; }
   .thumb .rm { position: absolute; top: -6px; right: -6px; width: 18px; height: 18px; border-radius: 50%; border: 0; background: #000; color: #fff; cursor: pointer; line-height: 1; padding: 0; font-size: 0.8rem; }
+
+  .permbar { display: flex; gap: 0.25rem; padding: 0.4rem 0.85rem 0; overflow-x: auto; scrollbar-width: none; background: var(--bg); }
+  .permbar::-webkit-scrollbar { display: none; }
+  .permpill { flex: none; font-size: 0.72rem; padding: 0.25rem 0.6rem; border: 1px solid var(--border); background: var(--bg); color: var(--muted); border-radius: 999px; cursor: pointer; white-space: nowrap; }
+  .permpill.on { background: var(--accent); color: #fff; border-color: var(--accent); }
 
   /* 세이프에어리어: iPhone 홈 인디케이터에 안 가리게 하단 여백 */
   .composer { display: flex; gap: 0.5rem; padding: 0.6rem 0.85rem; padding-bottom: calc(0.6rem + env(safe-area-inset-bottom)); border-top: 1px solid var(--border); align-items: center; background: var(--bg); }

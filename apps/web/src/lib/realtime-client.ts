@@ -96,14 +96,20 @@ export class DeckuClient {
     await this.sendCmd({ op: "loadMore", sessionId: sid, before });
   }
 
-  /** 채팅 전송: 브릿지가 claude --resume로 주입. 이미지 첨부 가능. */
-  async sendChat(sessionId: string, text: string, images?: ImageAttachment[]): Promise<void> {
+  /** 채팅 전송: 브릿지가 claude --resume로 주입. 이미지 첨부·권한 모드 가능. */
+  async sendChat(
+    sessionId: string,
+    text: string,
+    images?: ImageAttachment[],
+    mode?: "default" | "acceptEdits" | "bypassPermissions" | "plan",
+  ): Promise<void> {
     // ts·nonce: 브릿지 재전송 방어용 (E2EE 봉투 안에 들어감)
     await this.sendCmd({
       op: "send",
       sessionId,
       text,
       ...(images?.length ? { images } : {}),
+      ...(mode && mode !== "default" ? { mode } : {}),
       ts: Date.now(),
       nonce: crypto.randomUUID(),
     });

@@ -105,6 +105,8 @@ export const CmdPayloadSchema = z.discriminatedUnion("op", [
     images: z.array(ImageAttachmentSchema).optional(),
     ts: z.number().optional(),
     nonce: z.string().optional(),
+    // 권한 모드 (헤드리스 claude --permission-mode). 없으면 default.
+    mode: z.enum(["default", "acceptEdits", "bypassPermissions", "plan"]).optional(),
   }),
   // 과거 세션 기록 요청
   z.object({ op: z.literal("history"), limit: z.number().optional() }),

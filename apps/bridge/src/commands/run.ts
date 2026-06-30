@@ -212,7 +212,7 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
       console.log(`${DIM}↓ send ${shortId(cmd.sessionId)}: "${cmd.text.slice(0, 40)}"${imgN ? ` (+${imgN} img)` : ""} (응답 생성 중…)${RESET}`);
       // 한 턴(응답까지)이라 시간 소요 → fire-and-forget, append는 tail이 publish
       const t0 = Date.now();
-      injectMessage(found.cwd, cmd.sessionId, cmd.text, cmd.images)
+      injectMessage(found.cwd, cmd.sessionId, cmd.text, cmd.images, cmd.mode)
         .then(() => console.log(`${DIM}  inject 완료 ${shortId(cmd.sessionId)} (${((Date.now() - t0) / 1000).toFixed(1)}s)${RESET}`))
         .catch((e) => {
           const msg = (e as Error).message;
