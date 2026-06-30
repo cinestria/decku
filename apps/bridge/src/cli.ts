@@ -71,6 +71,13 @@ async function main(): Promise<void> {
   }
 }
 
+// 재연결 중 in-flight fetch가 취소되며 나는 AbortError는 정상(무해) → 무시. 그 외만 로깅.
+process.on("unhandledRejection", (reason) => {
+  const name = (reason as { name?: string })?.name;
+  if (name === "AbortError") return;
+  console.error("unhandledRejection:", reason);
+});
+
 main().catch((err) => {
   console.error(err);
   process.exit(1);

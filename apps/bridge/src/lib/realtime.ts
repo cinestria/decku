@@ -28,6 +28,7 @@ import type { BridgeConfig } from "./config.js";
 
 const REFRESH_MS = 50 * 60 * 1000; // realtime 토큰 1h 만료 전 갱신
 const HEALTH_MS = 15 * 1000; // 연결 상태 점검 주기 (끊겼으면 재구독)
+const HEAL_COOLDOWN_MS = 45 * 1000; // 재연결 직후 이 시간엔 또 안 함 (flapping 방지)
 
 export class BridgeRealtime {
   private supabase: SupabaseClient;
@@ -38,6 +39,8 @@ export class BridgeRealtime {
   private refreshTimer?: ReturnType<typeof setInterval>;
   private watchdog?: ReturnType<typeof setInterval>;
   private healing = false;
+  private unhealthyTicks = 0;
+  private lastHealAt = 0;
   private onCmd?: (cmd: CmdPayload) => void;
 
   constructor(private cfg: BridgeConfig) {
@@ -68,19 +71,28 @@ export class BridgeRealtime {
     });
   }
 
-  /** 끊긴 연결 자가복구: sessions 채널이 joined가 아니면 토큰 갱신 + 전체 재구독. */
+  /**
+   * 끊긴 연결 자가복구. supabase-js 자체 재연결과 싸우지 않도록 보수적으로:
+   *  - sessions 채널이 joined가 아닌 상태가 **연속 2회(≈30s)** 지속 + 직전 재연결로부터 쿨다운 지났을 때만.
+   */
   private async ensureHealthy(): Promise<void> {
     if (this.healing) return;
-    // 확실히 끊긴 상태에서만 재연결 (joining/leaving 등 일시 상태엔 손대지 않음 → 불필요한 재구독·깜빡임 방지)
-    const st = String(this.sessionsCh?.state);
-    if (st !== "closed" && st !== "errored" && this.sessionsCh) return;
+    if (String(this.sessionsCh?.state) === "joined") {
+      this.unhealthyTicks = 0;
+      return;
+    }
+    this.unhealthyTicks++;
+    if (this.unhealthyTicks < 2) return; // 일시적 close → supabase 자체 재연결에 먼저 맡김
+    if (Date.now() - this.lastHealAt < HEAL_COOLDOWN_MS) return;
     this.healing = true;
+    this.lastHealAt = Date.now();
     console.warn(`realtime 재연결 중… (sessions 상태: ${this.sessionsCh?.state})`);
     try {
       await this.refreshToken();
-      await this.supabase.removeAllChannels();
+      await this.supabase.removeAllChannels().catch(() => {}); // in-flight abort 무시
       this.txChs.clear();
       await this.subscribe();
+      this.unhealthyTicks = 0;
       console.log("realtime 재연결됨");
     } catch (e) {
       console.error("realtime 재연결 실패(다음 주기에 재시도):", (e as Error).message);
