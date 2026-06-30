@@ -238,7 +238,7 @@
     try {
       await client?.stop().catch(() => {});
       await startRealtime(pairing);
-      if (selected) await loadSession(selected); // tx 채널 재구독 + 백필
+      if (selected) await loadSession(selected, true); // tx 재구독 + 백필 (화면 유지, 깜빡임 없음)
     } catch (e) {
       status = "재연결 실패: " + (e as Error).message;
     } finally {
@@ -262,10 +262,11 @@
   let hasMore = $state(false); // 더 옛날이 있나
   let loadingOlder = $state(false);
 
-  async function loadSession(sid: string) {
+  // keep=true(재연결 등): 화면(events) 유지 — 백필이 도착하면 교체되어 깜빡임 없음
+  async function loadSession(sid: string, keep = false) {
     if (!client) return;
     selected = sid;
-    events = [];
+    if (!keep) events = [];
     loading = true;
     setThinking(false);
     stick = true; // 열면 최신(바닥)으로
@@ -273,6 +274,10 @@
     hasMore = false;
     loadingOlder = false;
     await client.openSession(sid, onTx);
+    // 안전망: 백필이 안 오면 입력창이 영영 막히지 않게
+    setTimeout(() => {
+      if (loading) loading = false;
+    }, 10_000);
   }
 
   function onTx(tx: TxPayload) {
@@ -615,6 +620,7 @@
   <span class="hnav">
     <button class="hback" onclick={() => (selected = null)} aria-label="목록으로">‹ 목록</button>
     <span class="htitle">{selectedTitle}</span>
+    {#if loading}<span class="hspin" aria-label="불러오는 중"></span>{/if}
   </span>
   <!-- 모바일: 맨 왼쪽 ☰ (데스크탑은 숨김) -->
   <button class="menu-btn" aria-label="메뉴" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>☰</button>
@@ -832,7 +838,7 @@ decku</code></pre>
         </div>
         <div class="scroll-wrap">
           <div id="convo-scroll" class="scroll" use:ptr bind:this={scrollEl} onscroll={updateThumb}>
-            {#if loading}<p class="muted">불러오는 중…</p>{/if}
+            {#if loading && !events.length}<p class="muted">불러오는 중…</p>{/if}
             {#if loadingOlder}
               <p class="muted older-hint">이전 대화 불러오는 중…</p>
             {:else if hasMore}
@@ -930,8 +936,8 @@ decku</code></pre>
             </svg>
             <input type="file" accept="image/*" multiple onchange={addImages} hidden />
           </label>
-          <input bind:value={draft} placeholder="메시지 입력…" />
-          <button type="submit" class="send" aria-label="전송" disabled={!draft.trim() && pendingImages.length === 0}>
+          <input bind:value={draft} placeholder={loading ? "불러오는 중…" : "메시지 입력…"} disabled={loading} />
+          <button type="submit" class="send" aria-label="전송" disabled={loading || (!draft.trim() && pendingImages.length === 0)}>
             <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
               <path d="M12 19V5M5 12l7-7 7 7" />
             </svg>
@@ -1116,6 +1122,7 @@ decku</code></pre>
   /* min-width:0: input이 placeholder 폭 밑으로 줄어 버튼을 안 밀어냄. font-size 16px: iOS 포커스 자동확대 방지. 높이 버튼과 일치 */
   .composer input { flex: 1; min-width: 0; height: 40px; padding: 0 1rem; border: 1px solid var(--border); background: var(--surface); color: var(--text); border-radius: 999px; font-size: 16px; outline: none; }
   .composer input:focus { border-color: var(--accent); background: var(--bg); }
+  .composer input:disabled { opacity: 0.6; }
   .send { flex: none; width: 40px; height: 40px; display: grid; place-items: center; border-radius: 50%; border: 0; background: var(--accent); color: #fff; cursor: pointer; transition: filter 0.15s, opacity 0.15s; }
   .send svg { width: 20px; height: 20px; }
   .send:hover:not(:disabled) { filter: brightness(1.08); }
@@ -1134,6 +1141,7 @@ decku</code></pre>
   .hnav { display: none; align-items: center; gap: 0.1rem; min-width: 0; flex: 1; }
   .hback { flex: none; background: none; border: 0; color: var(--accent); font-size: 0.95rem; font-weight: 500; cursor: pointer; padding: 0.25rem 0.3rem 0.25rem 0; white-space: nowrap; }
   .htitle { font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+  .hspin { flex: none; width: 13px; height: 13px; margin-left: 0.4rem; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
 
   @media (max-width: 640px) {
     .layout { grid-template-columns: 1fr; }
