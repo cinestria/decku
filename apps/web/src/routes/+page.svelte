@@ -77,7 +77,7 @@
   // 권한 모드 (claude --permission-mode)
   type PermMode = "default" | "acceptEdits" | "bypassPermissions" | "plan";
   let permMode = $state<PermMode>("default");
-  const permModes: PermMode[] = ["default", "acceptEdits", "bypassPermissions", "plan"];
+  const permModes: PermMode[] = ["default", "acceptEdits", "plan", "bypassPermissions"];
   const permLabel: Record<PermMode, string> = {
     default: "기본",
     acceptEdits: "편집 자동",
