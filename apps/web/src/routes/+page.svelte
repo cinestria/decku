@@ -620,14 +620,11 @@
   <span class="hnav">
     <button class="hback" onclick={() => (selected = null)} aria-label="목록으로">‹ 목록</button>
     <span class="htitle">{selectedTitle}</span>
-    {#if loading}<span class="hspin" aria-label="불러오는 중"></span>{/if}
   </span>
   <!-- 모바일: 맨 왼쪽 ☰ (데스크탑은 숨김) -->
   <button class="menu-btn" aria-label="메뉴" aria-expanded={menuOpen} onclick={() => (menuOpen = !menuOpen)}>☰</button>
   <a class="brand" href="/"><span class="logo">d</span>decku</a>
-  {#if reconnecting}
-    <span class="pill"><span class="dot pulse"></span>연결 중…</span>
-  {:else if connected}
+  {#if connected}
     <span class="pill"><span class="dot" class:on={online}></span>{online ? "온라인" : "오프라인"}</span>
   {:else}
     <span class="status">{status}</span>
@@ -651,6 +648,14 @@
     <button class="ghost" onclick={unpair}>해제</button>
   {/if}
 </header>
+
+{#if reconnecting || loading}
+  <div class="toast">
+    <span class="toast-spin"></span>
+    {reconnecting ? "연결 중…" : "불러오는 중…"}
+  </div>
+{/if}
+
 {#if menuOpen}
   <div
     class="menu-backdrop"
@@ -961,8 +966,6 @@ decku</code></pre>
   .status { color: var(--muted); font-size: 0.82rem; }
   .dot { width: 7px; height: 7px; border-radius: 50%; background: var(--danger); display: inline-block; }
   .dot.on { background: #21b35a; }
-  .dot.pulse { background: var(--accent); animation: dotpulse 1s ease-in-out infinite; }
-  @keyframes dotpulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.25; } }
   .spacer { margin-left: auto; }
 
   button { font-family: inherit; }
@@ -1141,7 +1144,11 @@ decku</code></pre>
   .hnav { display: none; align-items: center; gap: 0.1rem; min-width: 0; flex: 1; }
   .hback { flex: none; background: none; border: 0; color: var(--accent); font-size: 0.95rem; font-weight: 500; cursor: pointer; padding: 0.25rem 0.3rem 0.25rem 0; white-space: nowrap; }
   .htitle { font-weight: 600; font-size: 0.95rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
-  .hspin { flex: none; width: 13px; height: 13px; margin-left: 0.4rem; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+
+  /* 상단 중앙 상태 카드(토스트) */
+  .toast { position: fixed; top: calc(50px + 0.6rem); left: 50%; transform: translateX(-50%); z-index: 40; display: inline-flex; align-items: center; gap: 0.5rem; padding: 0.45rem 0.95rem; background: var(--bg); border: 1px solid var(--border); border-radius: 999px; box-shadow: 0 8px 28px rgba(0,0,0,0.2); font-size: 0.85rem; font-weight: 500; color: var(--text); animation: toastin 0.18s ease; }
+  .toast-spin { width: 14px; height: 14px; border: 2px solid var(--border); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.7s linear infinite; }
+  @keyframes toastin { from { opacity: 0; transform: translate(-50%, -6px); } to { opacity: 1; transform: translate(-50%, 0); } }
 
   @media (max-width: 640px) {
     .layout { grid-template-columns: 1fr; }
