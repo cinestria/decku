@@ -170,8 +170,20 @@ export class BridgeRealtime {
 
   /** REST broadcast로 명시 전송 (send()의 자동 REST 폴백 deprecation 경고 회피). */
   private async broadcast(ch: RealtimeChannel, env: EncryptedEnvelope): Promise<void> {
-    const res = await ch.httpSend("msg", env);
-    if (!res.success) console.error(`broadcast 실패 (${res.status}): ${res.error}`);
+    try {
+      const res = await ch.httpSend("msg", env);
+      if (!res.success) console.error(`broadcast 실패 (${res.status}): ${res.error} [${ch.topic}]`);
+    } catch (e) {
+      // 재연결 중 removeAllChannels()가 in-flight fetch를 취소 → AbortError. 무해(다음 heartbeat에 재전송)하지만,
+      // await 경로로 전파되면 최상위까지 올라가 프로세스를 죽였음. 여기서 잡아 상세 로그만 남기고 삼킨다.
+      if ((e as Error)?.name === "AbortError") {
+        console.warn(
+          `${dim(`realtime broadcast 취소(AbortError, 무해) [${ch.topic}] state=${ch.state} — 재연결 중 in-flight 요청 취소, 다음 주기에 재전송`)}`,
+        );
+        return;
+      }
+      throw e;
+    }
   }
 
   async close(): Promise<void> {
@@ -183,4 +195,8 @@ export class BridgeRealtime {
 
 function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
+}
+
+function dim(s: string): string {
+  return `\x1b[2m${s}\x1b[0m`;
 }

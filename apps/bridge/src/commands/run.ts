@@ -28,6 +28,7 @@ const RESET = "\x1b[0m";
 
 const shortId = (s: string) => s.slice(0, 8);
 const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const ts = () => new Date().toISOString().slice(11, 19); // HH:MM:SS (로컬 데몬 로그용)
 
 function toListItem(s: SessionFile): SessionListItem {
   return {
@@ -268,37 +269,54 @@ async function runRealtime(cfg: NonNullable<Awaited<ReturnType<typeof loadConfig
 
   let lastSessionsJson = "";
   let lastPublish = 0;
+  let consecErrors = 0;
   while (!stopped) {
-    const live = await liveSessions(await scanSessions());
-    liveMap = new Map(live.map((s) => [s.sessionId, s]));
+    // 한 iteration의 어떤 일시적 예외(재연결 중 AbortError, 파일 race, 순간 네트워크 오류 등)도
+    // 상시 실행 데몬을 죽이지 않도록 감싼다. 원인 파악용으로 상세 로그를 남기고 다음 주기에 재시도.
+    try {
+      const live = await liveSessions(await scanSessions());
+      liveMap = new Map(live.map((s) => [s.sessionId, s]));
 
-    // 목록 변화 시 또는 heartbeat 주기마다 publish (늦은 접속자 대비)
-    const now = Date.now();
-    const items = await Promise.all(
-      live.map(async (s) => {
-        const title = await titles.get(s.sessionId, transcriptPath(s), now);
-        const item = toListItem(s);
-        return title ? { ...item, title } : item;
-      }),
-    );
-    const json = JSON.stringify(items);
-    if (json !== lastSessionsJson || now - lastPublish > HEARTBEAT_MS) {
-      lastSessionsJson = json;
-      lastPublish = now;
-      await rt.publishSessions({ type: "sessions", items });
-    }
+      // 목록 변화 시 또는 heartbeat 주기마다 publish (늦은 접속자 대비)
+      const now = Date.now();
+      const items = await Promise.all(
+        live.map(async (s) => {
+          const title = await titles.get(s.sessionId, transcriptPath(s), now);
+          const item = toListItem(s);
+          return title ? { ...item, title } : item;
+        }),
+      );
+      const json = JSON.stringify(items);
+      if (json !== lastSessionsJson || now - lastPublish > HEARTBEAT_MS) {
+        lastSessionsJson = json;
+        lastPublish = now;
+        await rt.publishSessions({ type: "sessions", items });
+      }
 
-    // active 세션 live append
-    for (const [sid, tail] of activeTails) {
-      if (!liveMap.has(sid)) {
-        activeTails.delete(sid);
-        continue;
+      // active 세션 live append
+      for (const [sid, tail] of activeTails) {
+        if (!liveMap.has(sid)) {
+          activeTails.delete(sid);
+          continue;
+        }
+        const events = await tail.readNew();
+        if (events.length) {
+          await rt.publishTx({ type: "tx", sessionId: sid, events });
+          console.log(`${DIM}↑ tx ${shortId(sid)}: ${events.length}${RESET}`);
+        }
       }
-      const events = await tail.readNew();
-      if (events.length) {
-        await rt.publishTx({ type: "tx", sessionId: sid, events });
-        console.log(`${DIM}↑ tx ${shortId(sid)}: ${events.length}${RESET}`);
-      }
+      consecErrors = 0;
+    } catch (e) {
+      consecErrors++;
+      const err = e as Error;
+      const name = err?.name ?? "Error";
+      // AbortError는 재연결 중 in-flight 취소로 예전엔 프로세스를 죽였음 → 이제 여기서 흡수. 나머지도 로깅 후 계속.
+      const kind = name === "AbortError" ? "일시적 취소(AbortError)" : "루프 오류";
+      console.error(
+        `${DIM}[${ts()}]${RESET} watch 루프 ${kind} (연속 ${consecErrors}회) — 계속 진행: ` +
+          `${name}: ${err?.message ?? err}`,
+      );
+      if (name !== "AbortError" && err?.stack) console.error(`${DIM}${err.stack}${RESET}`);
     }
 
     await sleep(POLL_MS);

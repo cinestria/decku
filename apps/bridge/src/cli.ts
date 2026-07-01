@@ -71,14 +71,40 @@ async function main(): Promise<void> {
   }
 }
 
-// 재연결 중 in-flight fetch가 취소되며 나는 AbortError는 정상(무해) → 무시. 그 외만 로깅.
+const now = () => new Date().toISOString();
+const isAbort = (e: unknown) => (e as { name?: string })?.name === "AbortError";
+
+// 재연결 중 in-flight fetch가 취소되며 나는 AbortError는 정상(무해) → 흡수. 그 외만 로깅.
+// (개별 발생 지점에서도 잡지만, 놓친 경로가 있어도 데몬이 죽지 않도록 최종 그물망.)
 process.on("unhandledRejection", (reason) => {
-  const name = (reason as { name?: string })?.name;
-  if (name === "AbortError") return;
-  console.error("unhandledRejection:", reason);
+  if (isAbort(reason)) {
+    console.warn(`[${now()}] unhandledRejection: AbortError(무해, 재연결 중 취소) — 무시하고 계속`);
+    return;
+  }
+  console.error(`[${now()}] unhandledRejection:`, reason);
+});
+
+// 예전엔 uncaughtException 핸들러가 없어서 AbortError 하나로 프로세스가 즉사했음.
+process.on("uncaughtException", (err) => {
+  if (isAbort(err)) {
+    console.warn(`[${now()}] uncaughtException: AbortError(무해, 재연결 중 취소) — 무시하고 계속`);
+    return;
+  }
+  console.error(`[${now()}] uncaughtException — 종료:`, err);
+  process.exit(1);
 });
 
 main().catch((err) => {
-  console.error(err);
+  // run.ts의 watch 루프가 AbortError를 자체 흡수하므로 여기까진 정상적으론 안 온다.
+  // 그래도 도달했다면 루프는 이미 빠져나온 것 → AbortError라도 그냥 죽이지 말고 크게 로깅.
+  // (원래 여기서 무조건 exit(1)로 죽던 버그 지점.)
+  if (isAbort(err)) {
+    console.error(
+      `[${now()}] main(): AbortError가 watch 루프를 뚫고 최상위 도달 — 루프가 멈췄을 수 있음. exit(1).`,
+      err,
+    );
+    process.exit(1);
+  }
+  console.error(`[${now()}]`, err);
   process.exit(1);
 });
