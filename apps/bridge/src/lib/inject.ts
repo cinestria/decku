@@ -9,7 +9,46 @@
  */
 import { spawn, type ChildProcess } from "node:child_process";
 import { createInterface } from "node:readline";
+import { existsSync } from "node:fs";
+import { homedir } from "node:os";
+import { join, delimiter } from "node:path";
 import type { ImageAttachment } from "@decku/shared";
+
+/**
+ * `claude` 실행파일 경로 해석. launchd/자동시작 등 PATH가 빈약한 환경에서도 찾도록:
+ *  env 오버라이드 → PATH 탐색 → 흔한 설치 위치(native installer/npm/homebrew) 순. 못 찾으면 "claude"(PATH에 맡김).
+ * `spawn("claude")`가 ENOENT로 실패하던 문제(브릿지 PATH에 ~/.local/bin 등이 없을 때) 대응.
+ */
+let cachedBin: string | undefined;
+function claudeBin(): string {
+  if (cachedBin) return cachedBin;
+  const override = process.env.DECKU_CLAUDE_BIN || process.env.CLAUDE_BIN;
+  if (override && existsSync(override)) return (cachedBin = override);
+  for (const dir of (process.env.PATH ?? "").split(delimiter)) {
+    if (dir && existsSync(join(dir, "claude"))) return (cachedBin = join(dir, "claude"));
+  }
+  const home = homedir();
+  const candidates = [
+    join(home, ".local", "bin", "claude"),
+    join(home, ".claude", "local", "claude"),
+    "/opt/homebrew/bin/claude",
+    "/usr/local/bin/claude",
+    join(home, ".npm-global", "bin", "claude"),
+  ];
+  for (const c of candidates) if (existsSync(c)) return (cachedBin = c);
+  return "claude";
+}
+
+/** 해석된 claude 경로의 디렉터리를 PATH 앞에 붙인 env — claude가 자기 헬퍼(node 등)를 찾을 수 있게. */
+function claudeEnv(): NodeJS.ProcessEnv {
+  const bin = claudeBin();
+  const i = bin.lastIndexOf("/");
+  if (i <= 0) return process.env;
+  const dir = bin.slice(0, i);
+  const PATH = process.env.PATH ?? "";
+  if (PATH.split(delimiter).includes(dir)) return process.env;
+  return { ...process.env, PATH: `${dir}${delimiter}${PATH}` };
+}
 
 // 진행 중인 inject 프로세스 (세션별) — 웹의 '중단'으로 kill 하기 위함
 const running = new Map<string, ChildProcess>();
@@ -30,7 +69,7 @@ export function cancelInject(sessionId: string): boolean {
  */
 export function claudeLoggedIn(): Promise<boolean> {
   return new Promise((resolve) => {
-    const child = spawn("claude", ["auth", "status"], { stdio: ["ignore", "pipe", "pipe"], env: process.env });
+    const child = spawn(claudeBin(), ["auth", "status"], { stdio: ["ignore", "pipe", "pipe"], env: claudeEnv() });
     let out = "";
     const timer = setTimeout(() => {
       child.kill("SIGKILL");
@@ -52,6 +91,17 @@ export function claudeLoggedIn(): Promise<boolean> {
   });
 }
 
+/** spawn ENOENT(claude 실행파일 못 찾음)를 사람이 읽을 안내로 바꾼다. */
+function enoentHint(e: Error): Error {
+  if ((e as NodeJS.ErrnoException).code === "ENOENT") {
+    return new Error(
+      "claude 실행파일을 찾지 못했습니다 — 브릿지 PATH에 claude가 없습니다. " +
+        "'which claude'가 되는 터미널에서 decku를 재시작하거나, 환경변수 DECKU_CLAUDE_BIN=<claude 경로>로 지정하세요.",
+    );
+  }
+  return e;
+}
+
 /** claude 출력이 인증 만료/무효(401) 에러인가 — 토큰 삭제+재로그인 트리거용. */
 export function isAuthError(msg: string): boolean {
   return /invalid authentication|authentication credentials|failed to authenticate|401/i.test(msg);
@@ -64,7 +114,7 @@ export function isAuthError(msg: string): boolean {
  */
 export async function claudeSetupToken(): Promise<string | null> {
   await new Promise<void>((resolve) => {
-    const child = spawn("claude", ["setup-token"], { stdio: "inherit", env: process.env });
+    const child = spawn(claudeBin(), ["setup-token"], { stdio: "inherit", env: claudeEnv() });
     child.on("error", () => resolve());
     child.on("close", () => resolve());
   });
@@ -81,10 +131,10 @@ export async function claudeSetupToken(): Promise<string | null> {
 /** 새 세션 시작 — cwd에서 첫 메시지로 `claude -p`(--resume 없이) → 새 session_id 반환. */
 export function createSession(cwd: string, text: string): Promise<{ sessionId?: string; error?: string }> {
   return new Promise((resolve) => {
-    const child = spawn("claude", ["-p", text, "--output-format", "json"], {
+    const child = spawn(claudeBin(), ["-p", text, "--output-format", "json"], {
       cwd,
       stdio: ["ignore", "pipe", "pipe"],
-      env: process.env,
+      env: claudeEnv(),
     });
     let out = "";
     let err = "";
@@ -97,7 +147,7 @@ export function createSession(cwd: string, text: string): Promise<{ sessionId?: 
     child.stderr?.on("data", (d) => (err += String(d)));
     child.on("error", (e) => {
       clearTimeout(timer);
-      resolve({ error: e.message });
+      resolve({ error: enoentHint(e).message });
     });
     child.on("close", () => {
       clearTimeout(timer);
@@ -173,11 +223,11 @@ const INJECT_TIMEOUT_MS = 2 * 60 * 1000; // 응답이 이 시간 넘게 안 끝�
 
 function spawnClaude(cwd: string, args: string[], stdin?: string, sid?: string): Promise<void> {
   return new Promise((resolve, reject) => {
-    const child = spawn("claude", args, {
+    const child = spawn(claudeBin(), args, {
       cwd,
       // stdout도 캡처 — `--output-format json`은 실패 사유를 stdout(JSON)에 쓴다.
       stdio: [stdin ? "pipe" : "ignore", "pipe", "pipe"],
-      env: process.env,
+      env: claudeEnv(),
     });
     if (sid) running.set(sid, child); // 중단 가능하게 등록
     let out = "";
@@ -192,7 +242,7 @@ function spawnClaude(cwd: string, args: string[], stdin?: string, sid?: string):
     child.on("error", (e) => {
       clearTimeout(timer);
       if (sid) running.delete(sid);
-      reject(e);
+      reject(enoentHint(e));
     });
     child.on("close", (code) => {
       clearTimeout(timer);
